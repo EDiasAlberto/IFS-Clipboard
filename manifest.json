@@ -2,10 +2,15 @@
   "manifest_version": 3,
   "name": "Memory Usage Monitor",
   "version": "1.0",
+  "background": {
+      "service_worker": "/js/service-worker.js"
+   },
   "description": "Displays memory usage information from the current page",
   "action": {
-    "default_popup": "hello.html",
     "default_icon": "dog.png"
+  },
+  "side_panel": {
+    "default_path": "/html/sidepanel.html"
   },
   "permissions": ["sidePanel", "activeTab", "scripting"],
   "host_permissions": ["http://rpi.ediasalberto.com/*"]

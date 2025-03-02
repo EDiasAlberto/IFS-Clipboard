@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // Execute content script to get memory usage data
       const result = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["./scripts/content.js"],
+        files: ["/js/content.js"],
       });
 
       // Get the result from the content script
