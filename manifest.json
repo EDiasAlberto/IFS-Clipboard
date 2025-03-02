@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Memory Usage Monitor",
+  "version": "1.0",
+  "description": "Displays memory usage information from the current page",
+  "action": {
+    "default_popup": "hello.html",
+    "default_icon": "dog.png"
+  },
+  "permissions": ["sidePanel", "activeTab", "scripting"],
+  "host_permissions": ["http://rpi.ediasalberto.com/*"]
+}
