@@ -17,19 +17,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Get the keys from the first record to use as headers
     const headers = Object.keys(records[0]);
-
+    
     // Create table HTML
     let tableHTML = '<table style="width:100%; border-collapse: collapse;">';
-
+    
     // Create header row
     tableHTML += "<tr>";
     headers.forEach((header) => {
       tableHTML += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">${header}</th>`;
     });
     tableHTML += "</tr>";
-
-    // Create data rows
-    records.forEach((record) => {
+    
+    // Determine if we need to show the "Show More" button
+    const initialRowsToShow = 3;
+    const needsShowMore = records.length > initialRowsToShow;
+    
+    // Create data rows for the initial visible set
+    records.slice(0, initialRowsToShow).forEach((record, index) => {
       tableHTML += "<tr>";
       headers.forEach((header) => {
         const cellValue = record[header] !== undefined ? record[header] : "";
@@ -37,9 +41,54 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       tableHTML += "</tr>";
     });
-
+    
+    // Create data rows for the hidden set (with a different class)
+    if (needsShowMore) {
+      tableHTML += `<tbody id="hidden-rows" style="display: none;">`;
+      records.slice(initialRowsToShow).forEach((record, index) => {
+        tableHTML += "<tr>";
+        headers.forEach((header) => {
+          const cellValue = record[header] !== undefined ? record[header] : "";
+          tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">${cellValue}</td>`;
+        });
+        tableHTML += "</tr>";
+      });
+      tableHTML += `</tbody>`;
+    }
+    
+    // Close the table
     tableHTML += "</table>";
+    
+    // Add a "Show More" button if needed
+    if (needsShowMore) {
+      tableHTML += `
+        <div class="show-more-container">
+          <button id="show-more-btn" class="show-more-btn">
+            Show More (${records.length - initialRowsToShow} more rows)
+          </button>
+        </div>
+      `;
+    }
+    
     tableContainer.innerHTML = tableHTML;
+    
+    // Add event listener to the Show More button
+    if (needsShowMore) {
+      document.getElementById("show-more-btn").addEventListener("click", function() {
+        const hiddenRows = document.getElementById("hidden-rows");
+        const showMoreBtn = document.getElementById("show-more-btn");
+        
+        if (hiddenRows.style.display === "none") {
+          // Show the hidden rows
+          hiddenRows.style.display = "table-row-group";
+          showMoreBtn.textContent = "Show Less";
+        } else {
+          // Hide the rows again
+          hiddenRows.style.display = "none";
+          showMoreBtn.textContent = `Show More (${records.length - initialRowsToShow} more rows)`;
+        }
+      });
+    }
     
     // Update history if records have changed
     updateHistory(records);
@@ -185,6 +234,24 @@ document.addEventListener("DOMContentLoaded", function () {
         restoreFromHistory(item.data);
       });
     });
+    
+    // Add click handlers for the Show More buttons in history tables
+    document.querySelectorAll('.show-more-history-btn').forEach((btn) => {
+      btn.addEventListener('click', function() {
+        const hiddenRows = document.getElementById(btn.dataset.target);
+        
+        if (hiddenRows.style.display === "none") {
+          // Show the hidden rows
+          hiddenRows.style.display = "table-row-group";
+          btn.textContent = "Show Less";
+        } else {
+          // Hide the rows again
+          hiddenRows.style.display = "none";
+          const rowCount = hiddenRows.querySelectorAll('tr').length;
+          btn.textContent = `Show More (${rowCount} more rows)`;
+        }
+      });
+    });
   }
   
   // Function to create a table for history details
@@ -206,8 +273,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     tableHTML += "</tr>";
     
-    // Create data rows
-    records.forEach((record) => {
+    // Determine if we need to show the "Show More" button
+    const initialRowsToShow = 3;
+    const needsShowMore = records.length > initialRowsToShow;
+    const historyTableId = `history-table-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    
+    // Create data rows for the initial visible set
+    records.slice(0, initialRowsToShow).forEach((record) => {
       tableHTML += "<tr>";
       headers.forEach((header) => {
         const cellValue = record[header] !== undefined ? record[header] : "";
@@ -216,7 +288,35 @@ document.addEventListener("DOMContentLoaded", function () {
       tableHTML += "</tr>";
     });
     
+    // Create data rows for the hidden set
+    if (needsShowMore) {
+      tableHTML += `<tbody id="hidden-${historyTableId}" style="display: none;">`;
+      records.slice(initialRowsToShow).forEach((record) => {
+        tableHTML += "<tr>";
+        headers.forEach((header) => {
+          const cellValue = record[header] !== undefined ? record[header] : "";
+          tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; font-size: 0.9em;">${cellValue}</td>`;
+        });
+        tableHTML += "</tr>";
+      });
+      tableHTML += `</tbody>`;
+    }
+    
+    // Close the table
     tableHTML += "</table>";
+    
+    // Add a "Show More" button if needed
+    if (needsShowMore) {
+      tableHTML += `
+        <div class="show-more-container">
+          <button class="show-more-btn show-more-history-btn" 
+                  data-target="hidden-${historyTableId}">
+            Show More (${records.length - initialRowsToShow} more rows)
+          </button>
+        </div>
+      `;
+    }
+    
     return tableHTML;
   }
 
