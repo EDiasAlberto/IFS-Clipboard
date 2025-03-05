@@ -104,7 +104,7 @@ document.addEventListener("DOMContentLoaded", function () {
           <div class="history-header" data-expand="${expandId}">
             <div class="history-timestamp">${item.timestamp}</div>
             <div class="history-content">${item.summary}</div>
-            <div class="expand-icon">▼</div>
+            <div class="expand-icon expand-icon-down"></div>
           </div>
           <div id="${expandId}" class="history-details" style="display: none;">
             ${createHistoryDetailsTable(item.data)}
@@ -124,10 +124,12 @@ document.addEventListener("DOMContentLoaded", function () {
         
         if (detailsElement.style.display === 'none') {
           detailsElement.style.display = 'block';
-          expandIcon.textContent = '▲';
+          expandIcon.classList.remove('expand-icon-down');
+          expandIcon.classList.add('expand-icon-up');
         } else {
           detailsElement.style.display = 'none';
-          expandIcon.textContent = '▼';
+          expandIcon.classList.remove('expand-icon-up');
+          expandIcon.classList.add('expand-icon-down');
         }
       });
     });

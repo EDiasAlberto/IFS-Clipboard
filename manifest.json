@@ -13,5 +13,9 @@
     "default_path": "/html/sidepanel.html"
   },
   "permissions": ["sidePanel", "tabs", "scripting", "storage"],
-  "host_permissions": ["https://*/*"]
+  "host_permissions": ["https://*/*"],
+  "web_accessible_resources": [{
+    "resources": ["img/*.svg"],
+    "matches": ["<all_urls>"]
+  }]
 }
