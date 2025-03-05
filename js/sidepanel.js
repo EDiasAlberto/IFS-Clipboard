@@ -8,6 +8,10 @@ document.addEventListener("DOMContentLoaded", function () {
   let historyItems = [];
   const MAX_HISTORY_ITEMS = 10;
   
+  // Track expanded state of tables
+  let mainTableExpanded = false;
+  let expandedHistoryTables = new Set();
+  
   // Function to render table with data from storage
   function renderTable(records) {
     if (!records || records.length === 0) {
@@ -44,7 +48,9 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Create data rows for the hidden set (with a different class)
     if (needsShowMore) {
-      tableHTML += `<tbody id="hidden-rows" style="display: none;">`;
+      // Use the saved expanded state to determine initial display
+      const hiddenStyle = mainTableExpanded ? "table-row-group" : "none";
+      tableHTML += `<tbody id="hidden-rows" style="display: ${hiddenStyle};">`;
       records.slice(initialRowsToShow).forEach((record, index) => {
         tableHTML += "<tr>";
         headers.forEach((header) => {
@@ -61,10 +67,14 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Add a "Show More" button if needed
     if (needsShowMore) {
+      const buttonText = mainTableExpanded ? 
+        "Show Less" : 
+        `Show More (${records.length - initialRowsToShow} more rows)`;
+      
       tableHTML += `
         <div class="show-more-container">
           <button id="show-more-btn" class="show-more-btn">
-            Show More (${records.length - initialRowsToShow} more rows)
+            ${buttonText}
           </button>
         </div>
       `;
@@ -82,12 +92,17 @@ document.addEventListener("DOMContentLoaded", function () {
           // Show the hidden rows
           hiddenRows.style.display = "table-row-group";
           showMoreBtn.textContent = "Show Less";
+          mainTableExpanded = true;
         } else {
           // Hide the rows again
           hiddenRows.style.display = "none";
           showMoreBtn.textContent = `Show More (${records.length - initialRowsToShow} more rows)`;
+          mainTableExpanded = false;
         }
       });
+    } else {
+      // Reset expanded state if there are no rows to show
+      mainTableExpanded = false;
     }
     
     // Update history if records have changed
@@ -186,6 +201,10 @@ document.addEventListener("DOMContentLoaded", function () {
       // Create a unique ID for the expandable content
       const expandId = `history-expand-${index}`;
       const restoreId = `history-restore-${index}`;
+      const historyTableId = `history-table-${index}`;
+      
+      // Check if this history item was expanded
+      const wasExpanded = document.getElementById(expandId)?.style.display === 'block';
       
       historyHTML += `
         <div class="history-item">
@@ -193,10 +212,10 @@ document.addEventListener("DOMContentLoaded", function () {
             <div class="history-timestamp">${item.timestamp}</div>
             <div class="history-content">${item.summary}</div>
             <div class="restore-btn" id="${restoreId}">Restore</div>
-            <div class="expand-icon expand-icon-down"></div>
+            <div class="expand-icon ${wasExpanded ? 'expand-icon-up' : 'expand-icon-down'}"></div>
           </div>
-          <div id="${expandId}" class="history-details" style="display: none;">
-            ${createHistoryDetailsTable(item.data)}
+          <div id="${expandId}" class="history-details" style="display: ${wasExpanded ? 'block' : 'none'};">
+            ${createHistoryDetailsTable(item.data, index)}
           </div>
         </div>
       `;
@@ -237,25 +256,30 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Add click handlers for the Show More buttons in history tables
     document.querySelectorAll('.show-more-history-btn').forEach((btn) => {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation(); // Prevent event bubbling
+        
         const hiddenRows = document.getElementById(btn.dataset.target);
+        const historyId = btn.dataset.historyId;
         
         if (hiddenRows.style.display === "none") {
           // Show the hidden rows
           hiddenRows.style.display = "table-row-group";
           btn.textContent = "Show Less";
+          expandedHistoryTables.add(historyId);
         } else {
           // Hide the rows again
           hiddenRows.style.display = "none";
           const rowCount = hiddenRows.querySelectorAll('tr').length;
           btn.textContent = `Show More (${rowCount} more rows)`;
+          expandedHistoryTables.delete(historyId);
         }
       });
     });
   }
   
   // Function to create a table for history details
-  function createHistoryDetailsTable(records) {
+  function createHistoryDetailsTable(records, historyIndex) {
     if (!records || records.length === 0) {
       return "<p>No records in this history item</p>";
     }
@@ -276,7 +300,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Determine if we need to show the "Show More" button
     const initialRowsToShow = 3;
     const needsShowMore = records.length > initialRowsToShow;
-    const historyTableId = `history-table-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const historyTableId = `history-table-${historyIndex}`;
     
     // Create data rows for the initial visible set
     records.slice(0, initialRowsToShow).forEach((record) => {
@@ -290,7 +314,11 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Create data rows for the hidden set
     if (needsShowMore) {
-      tableHTML += `<tbody id="hidden-${historyTableId}" style="display: none;">`;
+      // Check if this history table should be expanded
+      const isExpanded = expandedHistoryTables.has(historyTableId);
+      const hiddenStyle = isExpanded ? "table-row-group" : "none";
+      
+      tableHTML += `<tbody id="hidden-${historyTableId}" style="display: ${hiddenStyle};">`;
       records.slice(initialRowsToShow).forEach((record) => {
         tableHTML += "<tr>";
         headers.forEach((header) => {
@@ -307,11 +335,17 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Add a "Show More" button if needed
     if (needsShowMore) {
+      const isExpanded = expandedHistoryTables.has(historyTableId);
+      const buttonText = isExpanded ? 
+        "Show Less" : 
+        `Show More (${records.length - initialRowsToShow} more rows)`;
+      
       tableHTML += `
         <div class="show-more-container">
           <button class="show-more-btn show-more-history-btn" 
-                  data-target="hidden-${historyTableId}">
-            Show More (${records.length - initialRowsToShow} more rows)
+                  data-target="hidden-${historyTableId}"
+                  data-history-id="${historyTableId}">
+            ${buttonText}
           </button>
         </div>
       `;
