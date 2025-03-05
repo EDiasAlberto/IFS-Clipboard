@@ -86,6 +86,21 @@ document.addEventListener("DOMContentLoaded", function () {
     previousRecords = recordsString;
   }
   
+  // Function to restore clipboard state from history
+  function restoreFromHistory(historyData) {
+    if (!historyData) return;
+    
+    // Store the data in Chrome's storage
+    chrome.storage.local.set({
+      "IFS-Aurena-CopyPasteRecordStorage": JSON.stringify(historyData)
+    });
+    
+    // Re-render the table with the restored data
+    renderTable(historyData);
+    
+    console.log("Restored clipboard state from history", historyData);
+  }
+  
   // Function to render history items
   function renderHistory() {
     if (historyItems.length === 0) {
@@ -98,12 +113,14 @@ document.addEventListener("DOMContentLoaded", function () {
     historyItems.forEach((item, index) => {
       // Create a unique ID for the expandable content
       const expandId = `history-expand-${index}`;
+      const restoreId = `history-restore-${index}`;
       
       historyHTML += `
         <div class="history-item">
           <div class="history-header" data-expand="${expandId}">
             <div class="history-timestamp">${item.timestamp}</div>
             <div class="history-content">${item.summary}</div>
+            <div class="restore-btn" id="${restoreId}">Restore</div>
             <div class="expand-icon expand-icon-down"></div>
           </div>
           <div id="${expandId}" class="history-details" style="display: none;">
@@ -117,7 +134,10 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Add click handlers for expandable history items
     document.querySelectorAll('.history-header').forEach((header) => {
-      header.addEventListener('click', () => {
+      header.addEventListener('click', (e) => {
+        // Don't expand if clicked on the restore button
+        if (e.target.classList.contains('restore-btn')) return;
+        
         const expandId = header.dataset.expand;
         const detailsElement = document.getElementById(expandId);
         const expandIcon = header.querySelector('.expand-icon');
@@ -131,6 +151,15 @@ document.addEventListener("DOMContentLoaded", function () {
           expandIcon.classList.remove('expand-icon-up');
           expandIcon.classList.add('expand-icon-down');
         }
+      });
+    });
+    
+    // Add click handlers for restore buttons
+    historyItems.forEach((item, index) => {
+      const restoreBtn = document.getElementById(`history-restore-${index}`);
+      restoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent triggering the expand/collapse
+        restoreFromHistory(item.data);
       });
     });
   }
