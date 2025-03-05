@@ -12,7 +12,7 @@
   "side_panel": {
     "default_path": "/html/sidepanel.html"
   },
-  "permissions": ["sidePanel", "tabs", "scripting", "storage"],
+  "permissions": ["sidePanel", "tabs", "scripting", "storage", "activeTab"],
   "host_permissions": ["https://*/*"],
   "web_accessible_resources": [{
     "resources": ["img/*.svg"],

@@ -98,7 +98,30 @@ document.addEventListener("DOMContentLoaded", function () {
     // Re-render the table with the restored data
     renderTable(historyData);
     
+    // Update the actual webpage's localStorage too
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (tabs[0]) {
+        chrome.scripting.executeScript({
+          target: { tabId: tabs[0].id },
+          function: updatePageLocalStorage,
+          args: [JSON.stringify(historyData)]
+        });
+      }
+    });
+    
     console.log("Restored clipboard state from history", historyData);
+  }
+
+  // This function runs in the context of the webpage
+  function updatePageLocalStorage(jsonData) {
+    try {
+      localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", jsonData);
+      console.log("Successfully restored data to page localStorage");
+      return true;
+    } catch (error) {
+      console.error("Failed to update page localStorage:", error);
+      return false;
+    }
   }
   
   // Function to render history items
