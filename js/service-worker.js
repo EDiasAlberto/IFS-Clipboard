@@ -25,6 +25,7 @@ function getLocalStorageItems() {
     chrome.runtime.sendMessage({
       action: "localStorageUpdated",
       data: recordsString,
+      timestamp: new Date().toISOString()
     });
   }
 }
