@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
     <title>Zest IFS Clipboard Manager</title>
@@ -15,56 +15,49 @@
         font-size: 18px;
         font-weight: bold;
         width: 100%;
+        box-sizing: border-box;
       }
       .section {
         background-color: #f0f0f0;
         border-radius: 4px;
         margin: 16px;
         padding: 16px;
+        overflow: auto;
       }
       .section-title {
         font-weight: bold;
         margin-bottom: 10px;
       }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+      }
+      tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+      tr:hover {
+        background-color: #e9e9e9;
+      }
     </style>
-    <script src="js/sidepanel.js"></script>
+    <script src="/js/sidePanel.js"></script>
   </head>
   <body>
     <div class="top-bar">Zest IFS Clipboard Manager</div>
 
     <div class="section">
-      <div class="section-title">Clipboard</div>
-      <!-- Content for section 1 -->
+      <div class="section-title">IFS Clipboard Records</div>
       <div id="clipboard-data-table">
-        <table>
-          <tr>
-            <th>Test header 1</th>
-            <th>Test header 2</th>
-          </tr>
-          <tr>
-            <td>Data 1</td>
-            <td>Data 2</td>
-          </tr>
-        </table>
+        <p>Loading clipboard records...</p>
       </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Export and Import</div>
-      <!-- Content for section 2 -->
-      <p>Nothing to be imported right now</p>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Clipboard name</div>
-      <!-- Content for section 3 -->
-      <p>To handle multiple clipboards to allow for multiple copy pastes</p>
-    </div>
-
-    <div class="section">
-      <div class="section-title">History</div>
-      <!-- Content for section -->
-      <p>Nothing here yet, start copying and pasting to use</p>
     </div>
   </body>
 </html>

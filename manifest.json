@@ -12,6 +12,6 @@
   "side_panel": {
     "default_path": "/html/sidepanel.html"
   },
-  "permissions": ["sidePanel", "activeTab", "scripting"],
-  "host_permissions": ["http://rpi.ediasalberto.com/*"]
+  "permissions": ["sidePanel", "tabs", "scripting", "storage"],
+  "host_permissions": ["https://*/*"]
 }
