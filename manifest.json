@@ -15,7 +15,7 @@
   "permissions": ["sidePanel", "tabs", "scripting", "storage", "activeTab"],
   "host_permissions": ["https://*/*"],
   "web_accessible_resources": [{
-    "resources": ["img/*.svg"],
+    "resources": ["img/*.svg", "css/*.css"],
     "matches": ["<all_urls>"]
   }]
 }
