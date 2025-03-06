@@ -107,26 +107,41 @@ class HistoryManager {
   
   // Helper method to continue the restore process with metadata
   continueRestore(historyData, metadata, resolve, reject) {
-    // Sync data across all trusted domains
-    const jsonString = JSON.stringify(historyData);
-    StorageUtils.updateAcrossTrustedDomains(jsonString)
-      .then(result => {
-        // Call the render callback with the restored data
-        if (this.renderCallback) {
-          this.renderCallback(historyData);
-        }
-        console.log("Restored clipboard state from history", historyData);
-        console.log(`Sync status: ${result.message}`);
+    try {
+      // Call the render callback with the restored data
+      if (this.renderCallback) {
+        this.renderCallback(historyData);
+      }
+      
+      // Sync using the background tab approach
+      // We need to pass both the JSON string and any existing metadata
+      const jsonString = JSON.stringify(historyData);
+      
+      // Check if we have access to the syncViaBackgroundTab function
+      if (typeof window.syncClipboardViaBackgroundTab === 'function') {
+        // Use the global sync function
+        window.syncClipboardViaBackgroundTab(jsonString, metadata);
+        console.log("Restored clipboard state from history using background tab sync");
         resolve(historyData);
-      })
-      .catch(err => {
-        console.error("Sync error during history restore:", err);
-        // Still resolve since the local restore worked
-        if (this.renderCallback) {
-          this.renderCallback(historyData);
-        }
-        resolve(historyData);
-      });
+      } else {
+        // Fall back to the previous method
+        console.warn("Background tab sync function not available, using fallback method");
+        StorageUtils.updateAcrossTrustedDomains(jsonString)
+          .then(result => {
+            console.log("Restored clipboard state from history", historyData);
+            console.log(`Sync status: ${result.message}`);
+            resolve(historyData);
+          })
+          .catch(err => {
+            console.error("Sync error during history restore:", err);
+            // Still resolve since the local restore worked
+            resolve(historyData);
+          });
+      }
+    } catch (err) {
+      console.error("Error during history restore:", err);
+      reject(err);
+    }
   }
   
   /**

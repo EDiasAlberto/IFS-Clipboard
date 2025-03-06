@@ -38,6 +38,11 @@ document.addEventListener("DOMContentLoaded", function () {
     // Track expanded state of main table
     let mainTableExpanded = false;
     
+    // Add a flag to track if background sync is in progress
+    let syncInProgress = false;
+    // Add variable to store the polling interval
+    let pollingInterval = null;
+    
     // Initialize history manager
     const historyManager = new HistoryManager(historyContainer, renderTable);
     
@@ -204,6 +209,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Function to check for updates in local storage
     function checkLocalStorage() {
+      // Skip checking if a sync operation is in progress
+      if (syncInProgress) {
+        console.log("Sync in progress, skipping storage check");
+        return;
+      }
+      
       chrome.storage.local.get(
         ["IFS-Aurena-CopyPasteRecordStorage", "TcclClipboardMetadata"],
         function (result) {
@@ -228,12 +239,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 // Update UI
                 renderTable(parsedRecords);
                 
-                // Ensure all tabs are synced with this data and metadata
-                chrome.runtime.sendMessage({
-                  action: "syncClipboardData",
-                  data: records,
-                  metadata: metadata
-                });
+                // Sync using background tab approach instead of direct sync
+                syncViaBackgroundTab(records, metadata);
               }
             } catch (e) {
               console.error("Error parsing records:", e);
@@ -254,6 +261,111 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       );
     }
+
+    // New function to sync data via a background tab
+    function syncViaBackgroundTab(records, metadata) {
+      // Set the flag to prevent polling
+      syncInProgress = true;
+      
+      // First get all trusted domains
+      chrome.storage.local.get('allowedDomains', function(result) {
+        const allowedDomains = result.allowedDomains || [];
+        
+        if (allowedDomains.length === 0) {
+          console.log("No trusted domains to sync to");
+          syncInProgress = false; // Reset flag since we're done
+          return;
+        }
+        
+        // Get all tabs to find ones that match our trusted domains
+        chrome.tabs.query({}, function(tabs) {
+          const trustedTabs = tabs.filter(tab => {
+            if (!tab.url || (!tab.url.startsWith('http://') && !tab.url.startsWith('https://'))) {
+              return false;
+            }
+            
+            try {
+              const url = new URL(tab.url);
+              const hostname = url.hostname;
+              
+              // Check if tab belongs to a trusted domain
+              for (const domain of allowedDomains) {
+                if (hostname.includes(domain) || domain.includes(hostname)) {
+                  // Skip tabs that already have our sync fragment
+                  if (tab.url.includes('#ifs-clipboard-sync')) {
+                    return false;
+                  }
+                  return true;
+                }
+              }
+              return false;
+            } catch (e) {
+              return false;
+            }
+          });
+          
+          // If no trusted tabs, reset flag and exit
+          if (trustedTabs.length === 0) {
+            console.log("No trusted tabs to sync to");
+            syncInProgress = false;
+            return;
+          }
+          
+          // Track how many sync operations are completed
+          let syncOperationsTotal = trustedTabs.length;
+          let syncOperationsCompleted = 0;
+          
+          // Process each trusted tab
+          trustedTabs.forEach(tab => {
+            // Create a new URL with our sync fragment
+            const syncUrl = tab.url + '/#ifs-clipboard-sync';
+            
+            // Create a background tab with the sync URL
+            chrome.tabs.create({ url: syncUrl, active: false }, function(newTab) {
+              // Execute script to update localStorage in this background tab
+              chrome.scripting.executeScript({
+                target: { tabId: newTab.id },
+                function: function(data, meta) {
+                  try {
+                    // Update localStorage with our data
+                    localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
+                    if (meta) {
+                      localStorage.setItem("TcclClipboardMetadata", meta);
+                    }
+                    console.log("[IFS Clipboard] Sync completed via background tab");
+                    return true;
+                  } catch (error) {
+                    console.error("[IFS Clipboard] Background tab sync failed:", error);
+                    return false;
+                  }
+                },
+                args: [records, metadata]
+              }, () => {
+                // Wait a short time to ensure data is saved before closing
+                setTimeout(() => {
+                  // Close the background tab
+                  chrome.tabs.remove(newTab.id, function() {
+                    console.log(`Background sync tab closed: ${newTab.id}`);
+                    
+                    // Track completion and reset flag when all operations are done
+                    syncOperationsCompleted++;
+                    if (syncOperationsCompleted === syncOperationsTotal) {
+                      console.log("All sync operations completed, resuming polling");
+                      syncInProgress = false;
+                    }
+                  });
+                }, 500);
+              });
+            });
+          });
+        });
+      });
+    }
+
+    // Make the function available globally for HistoryManager
+    window.syncClipboardViaBackgroundTab = function(recordsStr, metadata) {
+      syncViaBackgroundTab(recordsStr, metadata);
+    };
 
     function loadTrustedDomains() {
       const domainsContainer = document.getElementById('domains-container');
@@ -307,7 +419,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Initial check
     checkLocalStorage();
 
-    // Set up polling every 500ms
-    setInterval(checkLocalStorage, 500);
+    // Set up polling with the ability to be paused
+    pollingInterval = setInterval(checkLocalStorage, 500);
   }
 });
