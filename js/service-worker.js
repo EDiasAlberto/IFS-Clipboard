@@ -97,35 +97,54 @@ async function checkAndSetSidePanelPage() {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     
-    if (tabs.length > 0) {
-      const currentTab = tabs[0];
-      
-      // Skip permission check for chrome:// URLs
-      if (currentTab.url.startsWith('chrome://')) {
-        chrome.sidePanel.setOptions({
-          path: 'html/sidepanel.html'
-        });
-        return;
+    if (tabs.length === 0) {
+      console.log("No active tab found");
+      return;
+    }
+    
+    const currentTab = tabs[0];
+    console.log("Checking permissions for tab:", currentTab.url);
+    
+    // Skip permission check for chrome:// URLs
+    if (!currentTab.url || currentTab.url.startsWith('chrome://')) {
+      console.log("Chrome URL detected, skipping permission check");
+      chrome.sidePanel.setOptions({
+        path: 'html/sidepanel.html'
+      });
+      return;
+    }
+    
+    // Extract just the domain part of the URL
+    const url = new URL(currentTab.url);
+    const domain = url.hostname;
+    console.log("Current domain:", domain);
+    
+    // Get allowed domains
+    const result = await chrome.storage.local.get('allowedDomains');
+    const allowedDomains = result.allowedDomains || [];
+    console.log("Allowed domains:", allowedDomains);
+    
+    // Check if domain is trusted (using flexible matching)
+    let isTrusted = false;
+    for (const allowedDomain of allowedDomains) {
+      if (domain.includes(allowedDomain) || allowedDomain.includes(domain)) {
+        isTrusted = true;
+        console.log("Domain is trusted, matched with:", allowedDomain);
+        break;
       }
-      
-      // Extract just the domain part of the URL
-      const url = new URL(currentTab.url);
-      const domain = url.hostname;
-      
-      // Get allowed domains
-      const result = await chrome.storage.local.get('allowedDomains');
-      const allowedDomains = result.allowedDomains || [];
-      
-      // Set appropriate page based on permissions
-      if (allowedDomains.includes(domain)) {
-        chrome.sidePanel.setOptions({
-          path: 'html/sidepanel.html'
-        });
-      } else {
-        chrome.sidePanel.setOptions({
-          path: 'html/permission.html'
-        });
-      }
+    }
+    
+    // Set appropriate page based on permissions
+    if (isTrusted) {
+      console.log("Loading main sidepanel for trusted domain");
+      chrome.sidePanel.setOptions({
+        path: 'html/sidepanel.html'
+      });
+    } else {
+      console.log("Loading permission page for untrusted domain");
+      chrome.sidePanel.setOptions({
+        path: 'html/permission.html'
+      });
     }
   } catch (error) {
     console.error("Error checking permission:", error);
@@ -511,4 +530,27 @@ chrome.runtime.onInstalled.addListener(() => {
       chrome.storage.local.set({ allowedDomains: [] });
     }
   });
+});
+
+// Add this new listener to detect tab focus changes
+
+// Listen for tab activation (tab switching)
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  console.log("Tab activated:", activeInfo.tabId);
+  // When tab changes, check if permissions are needed
+  checkAndSetSidePanelPage();
+});
+
+// Listen for tab URL changes
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Only trigger when the tab has finished loading and is the active tab
+  if (changeInfo.status === 'complete') {
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (tabs[0] && tabs[0].id === tabId) {
+        console.log("Active tab updated:", tab.url);
+        // When active tab URL changes, check if permissions are needed
+        checkAndSetSidePanelPage();
+      }
+    });
+  }
 });

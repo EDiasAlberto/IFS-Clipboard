@@ -3,17 +3,20 @@ document.addEventListener('DOMContentLoaded', function() {
   const denyButton = document.getElementById('deny-button');
   const siteUrlElement = document.getElementById('site-url');
   
-  // Send message to check permission status on page load
-  chrome.runtime.sendMessage({action: "checkPermission"});
+  console.log("Permission page loaded, checking current tab");
   
-  // Get current tab information
+  // Get current tab information immediately when this page loads
   chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
     const currentTab = tabs[0];
-    if (currentTab) {
+    if (currentTab && currentTab.url && 
+        !currentTab.url.startsWith('chrome://') && 
+        !currentTab.url.startsWith('chrome-extension://')) {
+      
       // Extract and display just the domain part of the URL
       const url = new URL(currentTab.url);
       const domain = url.hostname;
       siteUrlElement.textContent = domain;
+      console.log("Current domain for permission request:", domain);
       
       // Try to get the site favicon
       if (currentTab.favIconUrl) {
@@ -26,6 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } else {
       siteUrlElement.textContent = 'Unknown site';
+      console.log("Unable to determine current site");
     }
   });
   
@@ -33,7 +37,10 @@ document.addEventListener('DOMContentLoaded', function() {
   allowButton.addEventListener('click', function() {
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
       const currentTab = tabs[0];
-      if (currentTab) {
+      if (currentTab && currentTab.url && 
+          !currentTab.url.startsWith('chrome://') &&
+          !currentTab.url.startsWith('chrome-extension://')) {
+        
         // Extract just the domain part of the URL
         const url = new URL(currentTab.url);
         // Use the full hostname to ensure proper cross-domain matching
@@ -61,6 +68,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           });
         });
+      } else {
+        console.error("Cannot grant permission: invalid tab or URL");
+        alert("Unable to grant permission. Please try again on a valid web page.");
       }
     });
   });
