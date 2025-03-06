@@ -19,6 +19,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (currentTab.favIconUrl) {
         document.getElementById('site-icon').src = currentTab.favIconUrl;
       }
+      
+      // Add IFS domain class if this is an IFS domain
+      if (domain.includes('ifs.cloud')) {
+        siteUrlElement.classList.add('ifs-domain');
+      }
     } else {
       siteUrlElement.textContent = 'Unknown site';
     }
@@ -31,7 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (currentTab) {
         // Extract just the domain part of the URL
         const url = new URL(currentTab.url);
-        const domain = url.hostname;
+        // Use the full hostname to ensure proper cross-domain matching
+        const domain = url.hostname; 
         
         // Get existing allowed domains
         chrome.storage.local.get('allowedDomains', function(result) {
@@ -42,6 +48,8 @@ document.addEventListener('DOMContentLoaded', function() {
             allowedDomains.push(domain);
             chrome.storage.local.set({ allowedDomains: allowedDomains }, function() {
               console.log('Domain added to allowed list:', domain);
+              // Log the current list for debugging
+              console.log('Current allowed domains:', allowedDomains);
             });
           }
           

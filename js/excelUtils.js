@@ -137,6 +137,7 @@ function updatePageLocalStorage(jsonData) {
   }
 }
 
+// Function should remain but now only for direct in-page calls
 // Export functions for use in other modules
 window.ExcelUtils = {
   exportToExcel,

@@ -62,25 +62,19 @@ document.addEventListener("DOMContentLoaded", function () {
           // Update UI by rendering the table
           renderTable(clipboardData);
           
-          // Store data in Chrome storage
+          // Sync to all trusted domains
           const jsonString = JSON.stringify(clipboardData);
-          chrome.storage.local.set({
-            "IFS-Aurena-CopyPasteRecordStorage": jsonString
-          });
-          
-          // Also update the website's localStorage
-          chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-            if (tabs[0]) {
-              chrome.scripting.executeScript({
-                target: { tabId: tabs[0].id },
-                function: ExcelUtils.updatePageLocalStorage,
-                args: [jsonString]
-              });
-            }
-          });
-          
-          console.log("Excel import completed successfully");
-          alert(`Imported ${clipboardData.length} rows successfully`);
+          StorageUtils.updateAcrossTrustedDomains(jsonString)
+            .then(result => {
+              console.log("Excel import completed successfully");
+              console.log(`Sync status: ${result.message}`);
+              alert(`Imported ${clipboardData.length} rows successfully`);
+            })
+            .catch(error => {
+              console.error("Sync error:", error);
+              // Still show success since the import itself worked
+              alert(`Imported ${clipboardData.length} rows successfully, but sync had issues`);
+            });
         })
         .catch(error => {
           alert("Failed to import Excel data: " + error.message);
@@ -211,13 +205,29 @@ document.addEventListener("DOMContentLoaded", function () {
     // Function to check for updates in local storage
     function checkLocalStorage() {
       chrome.storage.local.get(
-        "IFS-Aurena-CopyPasteRecordStorage",
+        ["IFS-Aurena-CopyPasteRecordStorage", "TcclClipboardMetadata"],
         function (result) {
           const records = result["IFS-Aurena-CopyPasteRecordStorage"];
+          const metadata = result["TcclClipboardMetadata"];
+          
           if (records) {
             try {
               const parsedRecords = JSON.parse(records);
+              
+              // Store the current data for export functionality
+              currentClipboardData = parsedRecords;
+              
+              // Update UI
               renderTable(parsedRecords);
+              
+              // Optionally, ensure all tabs are synced with this data and metadata
+              // This provides an additional layer of sync reliability
+              chrome.runtime.sendMessage({
+                action: "syncClipboardData",
+                data: records,
+                metadata: metadata
+              });
+              
             } catch (e) {
               console.error("Error parsing records:", e);
               tableContainer.innerHTML = "<p>Error parsing records</p>";
@@ -230,6 +240,56 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       );
     }
+
+
+    function loadTrustedDomains() {
+      const domainsContainer = document.getElementById('domains-container');
+      
+      chrome.storage.local.get('allowedDomains', function(result) {
+        const allowedDomains = result.allowedDomains || [];
+        
+        if (allowedDomains.length === 0) {
+          domainsContainer.innerHTML = '<p>No trusted domains added yet.</p>';
+          return;
+        }
+        
+        let domainsHtml = '<ul class="domains-list">';
+        allowedDomains.forEach(domain => {
+          domainsHtml += `
+            <li class="domain-item">
+              <span class="domain-name">${domain}</span>
+              <button class="domain-remove" data-domain="${domain}">Remove</button>
+            </li>
+          `;
+        });
+        domainsHtml += '</ul>';
+        
+        domainsContainer.innerHTML = domainsHtml;
+        
+        // Add event listeners for remove buttons
+        document.querySelectorAll('.domain-remove').forEach(button => {
+          button.addEventListener('click', function() {
+            const domainToRemove = this.getAttribute('data-domain');
+            removeTrustedDomain(domainToRemove);
+          });
+        });
+      });
+    }
+
+    function removeTrustedDomain(domain) {
+      chrome.storage.local.get('allowedDomains', function(result) {
+        const allowedDomains = result.allowedDomains || [];
+        const updatedDomains = allowedDomains.filter(d => d !== domain);
+        
+        chrome.storage.local.set({ allowedDomains: updatedDomains }, function() {
+          console.log('Domain removed from trusted list:', domain);
+          loadTrustedDomains(); // Reload the list
+        });
+      });
+    }
+
+    // Call this in your initialization
+    loadTrustedDomains();
 
     // Initial check
     checkLocalStorage();

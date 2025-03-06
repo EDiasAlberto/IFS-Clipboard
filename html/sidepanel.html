@@ -4,6 +4,8 @@
     <title>Zest IFS Clipboard Manager</title>
     <link rel="stylesheet" href="/css/styles.css">
     <script src="/js/xlsx-full-min.js"></script>
+    <script src="/js/debug.js"></script>
+    <script src="/js/storageUtils.js"></script>
     <script src="/js/excelUtils.js"></script>
     <script src="/js/historyManager.js"></script>
     <script src="/js/sidePanel.js"></script>
@@ -29,6 +31,13 @@
       <div class="section-title">History</div>
       <div id="history-container">
         <p>No history available yet</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Trusted Domains</div>
+      <div id="domains-container">
+        <p>Loading trusted domains...</p>
       </div>
     </div>
   </body>

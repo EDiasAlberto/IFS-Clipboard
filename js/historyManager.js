@@ -74,41 +74,59 @@ class HistoryManager {
     
     return new Promise((resolve, reject) => {
       try {
-        // Store the data in Chrome's storage
-        chrome.storage.local.set({
-          "IFS-Aurena-CopyPasteRecordStorage": JSON.stringify(historyData)
-        }, () => {
-          // Update the actual webpage's localStorage too
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-              chrome.scripting.executeScript({
-                target: { tabId: tabs[0].id },
-                function: function(jsonData) {
-                  try {
-                    localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", jsonData);
-                    return true;
-                  } catch (error) {
-                    return false;
-                  }
-                },
-                args: [JSON.stringify(historyData)]
-              }, () => {
-                // Call the render callback with the restored data
-                if (this.renderCallback) {
-                  this.renderCallback(historyData);
-                }
-                console.log("Restored clipboard state from history", historyData);
-                resolve(historyData);
-              });
-            } else {
-              resolve(historyData);
+        // Get current metadata before restoring from history
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (!tabs || tabs.length === 0) {
+            // No active tab, proceed without metadata
+            this.continueRestore(historyData, null, resolve, reject);
+            return;
+          }
+          
+          const activeTab = tabs[0];
+          
+          // Try to get metadata from the active tab
+          chrome.scripting.executeScript({
+            target: { tabId: activeTab.id },
+            function: function() {
+              return localStorage.getItem("TcclClipboardMetadata");
             }
+          }, (results) => {
+            let metadata = null;
+            if (results && results[0] && results[0].result) {
+              metadata = results[0].result;
+            }
+            
+            this.continueRestore(historyData, metadata, resolve, reject);
           });
         });
       } catch (err) {
         reject(err);
       }
     });
+  }
+  
+  // Helper method to continue the restore process with metadata
+  continueRestore(historyData, metadata, resolve, reject) {
+    // Sync data across all trusted domains
+    const jsonString = JSON.stringify(historyData);
+    StorageUtils.updateAcrossTrustedDomains(jsonString)
+      .then(result => {
+        // Call the render callback with the restored data
+        if (this.renderCallback) {
+          this.renderCallback(historyData);
+        }
+        console.log("Restored clipboard state from history", historyData);
+        console.log(`Sync status: ${result.message}`);
+        resolve(historyData);
+      })
+      .catch(err => {
+        console.error("Sync error during history restore:", err);
+        // Still resolve since the local restore worked
+        if (this.renderCallback) {
+          this.renderCallback(historyData);
+        }
+        resolve(historyData);
+      });
   }
   
   /**
