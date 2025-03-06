@@ -214,25 +214,39 @@ document.addEventListener("DOMContentLoaded", function () {
             try {
               const parsedRecords = JSON.parse(records);
               
-              // Store the current data for export functionality
-              currentClipboardData = parsedRecords;
+              // Compare with current data to avoid unnecessary updates
+              const currentDataStr = JSON.stringify(currentClipboardData);
+              const newDataStr = JSON.stringify(parsedRecords);
               
-              // Update UI
-              renderTable(parsedRecords);
-              
-              // Optionally, ensure all tabs are synced with this data and metadata
-              // This provides an additional layer of sync reliability
-              chrome.runtime.sendMessage({
-                action: "syncClipboardData",
-                data: records,
-                metadata: metadata
-              });
-              
+              // Only update if data has changed
+              if (currentDataStr !== newDataStr) {
+                console.log("Clipboard data changed, updating UI");
+                
+                // Store the current data for export functionality
+                currentClipboardData = parsedRecords;
+                
+                // Update UI
+                renderTable(parsedRecords);
+                
+                // Ensure all tabs are synced with this data and metadata
+                chrome.runtime.sendMessage({
+                  action: "syncClipboardData",
+                  data: records,
+                  metadata: metadata
+                });
+              }
             } catch (e) {
               console.error("Error parsing records:", e);
               tableContainer.innerHTML = "<p>Error parsing records</p>";
             }
-          } else {
+          } else if (currentClipboardData !== null) {
+            // Only update if we previously had data but now don't
+            tableContainer.innerHTML = "<p>No records found in storage</p>";
+            currentClipboardData = null;
+            // Initialize history if no previous records
+            historyManager.initHistory();
+          } else if (!tableContainer.innerHTML) {
+            // Initialize if table is empty
             tableContainer.innerHTML = "<p>No records found in storage</p>";
             // Initialize history if no previous records
             historyManager.initHistory();
@@ -240,7 +254,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       );
     }
-
 
     function loadTrustedDomains() {
       const domainsContainer = document.getElementById('domains-container');
