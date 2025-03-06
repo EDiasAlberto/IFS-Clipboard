@@ -2,18 +2,56 @@ document.addEventListener("DOMContentLoaded", function () {
   // Reference to containers
   const tableContainer = document.getElementById("clipboard-data-table");
   const historyContainer = document.getElementById("history-container");
+  const exportButton = document.getElementById("export-excel");
   
   // Keep track of previous records for history
   let previousRecords = null;
   let historyItems = [];
   const MAX_HISTORY_ITEMS = 10;
   
+  // Current clipboard data
+  let currentClipboardData = null;
+  
   // Track expanded state of tables
   let mainTableExpanded = false;
   let expandedHistoryTables = new Set();
   
+  // Function to export data to Excel
+  function exportToExcel() {
+    if (!currentClipboardData || currentClipboardData.length === 0) {
+      alert("No clipboard data available to export");
+      return;
+    }
+    
+    try {
+      // Create a new workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Convert clipboard data to worksheet
+      const ws = XLSX.utils.json_to_sheet(currentClipboardData);
+      
+      // Add the worksheet to the workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Clipboard Data");
+      
+      // Generate Excel file with current timestamp in filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      XLSX.writeFile(wb, `IFS_Clipboard_Export_${timestamp}.xlsx`);
+      
+      console.log("Excel export completed successfully");
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data: " + error.message);
+    }
+  }
+  
+  // Add click event to export button
+  exportButton.addEventListener("click", exportToExcel);
+  
   // Function to render table with data from storage
   function renderTable(records) {
+    // Store the current data for export functionality
+    currentClipboardData = records;
+    
     if (!records || records.length === 0) {
       tableContainer.innerHTML = "<p>No clipboard records found</p>";
       return;
@@ -159,9 +197,6 @@ document.addEventListener("DOMContentLoaded", function () {
       "IFS-Aurena-CopyPasteRecordStorage": JSON.stringify(historyData)
     });
     
-    // Re-render the table with the restored data
-    renderTable(historyData);
-    
     // Update the actual webpage's localStorage too
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
       if (tabs[0]) {
@@ -173,9 +208,12 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
     
+    // Re-render the table with the restored data
+    renderTable(historyData);
+    
     console.log("Restored clipboard state from history", historyData);
   }
-
+  
   // This function runs in the context of the webpage
   function updatePageLocalStorage(jsonData) {
     try {
@@ -186,6 +224,82 @@ document.addEventListener("DOMContentLoaded", function () {
       console.error("Failed to update page localStorage:", error);
       return false;
     }
+  }
+  
+  // Function to create a table for history details
+  function createHistoryDetailsTable(records, historyIndex) {
+    if (!records || records.length === 0) {
+      return "<p>No records in this history item</p>";
+    }
+    
+    // Get the keys from the first record to use as headers
+    const headers = Object.keys(records[0]);
+    
+    // Create table HTML
+    let tableHTML = '<table style="width:100%; border-collapse: collapse; margin-top: 8px;">';
+    
+    // Create header row
+    tableHTML += "<tr>";
+    headers.forEach((header) => {
+      tableHTML += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd; font-size: 0.9em;">${header}</th>`;
+    });
+    tableHTML += "</tr>";
+    
+    // Determine if we need to show the "Show More" button
+    const initialRowsToShow = 3;
+    const needsShowMore = records.length > initialRowsToShow;
+    const historyTableId = `history-table-${historyIndex}`;
+    
+    // Create data rows for the initial visible set
+    records.slice(0, initialRowsToShow).forEach((record) => {
+      tableHTML += "<tr>";
+      headers.forEach((header) => {
+        const cellValue = record[header] !== undefined ? record[header] : "";
+        tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; font-size: 0.9em;">${cellValue}</td>`;
+      });
+      tableHTML += "</tr>";
+    });
+    
+    // Create data rows for the hidden set
+    if (needsShowMore) {
+      // Check if this history table should be expanded
+      const isExpanded = expandedHistoryTables.has(historyTableId);
+      const hiddenStyle = isExpanded ? "table-row-group" : "none";
+      
+      tableHTML += `<tbody id="hidden-${historyTableId}" style="display: ${hiddenStyle};">`;
+      records.slice(initialRowsToShow).forEach((record) => {
+        tableHTML += "<tr>";
+        headers.forEach((header) => {
+          const cellValue = record[header] !== undefined ? record[header] : "";
+          tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; font-size: 0.9em;">${cellValue}</td>`;
+        });
+        tableHTML += "</tr>";
+      });
+      tableHTML += `</tbody>`;
+    }
+    
+    // Close the table
+    tableHTML += "</table>";
+    
+    // Add a "Show More" button if needed
+    if (needsShowMore) {
+      const isExpanded = expandedHistoryTables.has(historyTableId);
+      const buttonText = isExpanded ? 
+        "Show Less" : 
+        `Show More (${records.length - initialRowsToShow} more rows)`;
+      
+      tableHTML += `
+        <div class="show-more-container">
+          <button class="show-more-btn show-more-history-btn" 
+                  data-target="hidden-${historyTableId}"
+                  data-history-id="${historyTableId}">
+            ${buttonText}
+          </button>
+        </div>
+      `;
+    }
+    
+    return tableHTML;
   }
   
   // Function to render history items
@@ -276,82 +390,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       });
     });
-  }
-  
-  // Function to create a table for history details
-  function createHistoryDetailsTable(records, historyIndex) {
-    if (!records || records.length === 0) {
-      return "<p>No records in this history item</p>";
-    }
-    
-    // Get the keys from the first record to use as headers
-    const headers = Object.keys(records[0]);
-    
-    // Create table HTML
-    let tableHTML = '<table style="width:100%; border-collapse: collapse; margin-top: 8px;">';
-    
-    // Create header row
-    tableHTML += "<tr>";
-    headers.forEach((header) => {
-      tableHTML += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd; font-size: 0.9em;">${header}</th>`;
-    });
-    tableHTML += "</tr>";
-    
-    // Determine if we need to show the "Show More" button
-    const initialRowsToShow = 3;
-    const needsShowMore = records.length > initialRowsToShow;
-    const historyTableId = `history-table-${historyIndex}`;
-    
-    // Create data rows for the initial visible set
-    records.slice(0, initialRowsToShow).forEach((record) => {
-      tableHTML += "<tr>";
-      headers.forEach((header) => {
-        const cellValue = record[header] !== undefined ? record[header] : "";
-        tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; font-size: 0.9em;">${cellValue}</td>`;
-      });
-      tableHTML += "</tr>";
-    });
-    
-    // Create data rows for the hidden set
-    if (needsShowMore) {
-      // Check if this history table should be expanded
-      const isExpanded = expandedHistoryTables.has(historyTableId);
-      const hiddenStyle = isExpanded ? "table-row-group" : "none";
-      
-      tableHTML += `<tbody id="hidden-${historyTableId}" style="display: ${hiddenStyle};">`;
-      records.slice(initialRowsToShow).forEach((record) => {
-        tableHTML += "<tr>";
-        headers.forEach((header) => {
-          const cellValue = record[header] !== undefined ? record[header] : "";
-          tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; font-size: 0.9em;">${cellValue}</td>`;
-        });
-        tableHTML += "</tr>";
-      });
-      tableHTML += `</tbody>`;
-    }
-    
-    // Close the table
-    tableHTML += "</table>";
-    
-    // Add a "Show More" button if needed
-    if (needsShowMore) {
-      const isExpanded = expandedHistoryTables.has(historyTableId);
-      const buttonText = isExpanded ? 
-        "Show Less" : 
-        `Show More (${records.length - initialRowsToShow} more rows)`;
-      
-      tableHTML += `
-        <div class="show-more-container">
-          <button class="show-more-btn show-more-history-btn" 
-                  data-target="hidden-${historyTableId}"
-                  data-history-id="${historyTableId}">
-            ${buttonText}
-          </button>
-        </div>
-      `;
-    }
-    
-    return tableHTML;
   }
 
   // Function to check for updates in local storage

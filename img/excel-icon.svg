@@ -1,0 +1,5 @@
+<!-- filepath: /Users/ethan/Documents/TestExtensionDev/img/excel-icon.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="16" height="16">
+  <path d="M14,2H6C4.9,2 4,2.9 4,4v16c0,1.1 0.9,2 2,2h12c1.1,0 2-0.9 2-2V8L14,2zM16,18H8v-2h8V18zM16,14H8v-2h8V14zM13,9V3.5L18.5,9H13z"/>
+  <path d="M8.2,9L10,12.3L11.8,9H13L10.5,13.5L13,18h-1.2l-1.8-3.2L8.2,18H7l2.5-4.5L7,9H8.2z"/>
+</svg>

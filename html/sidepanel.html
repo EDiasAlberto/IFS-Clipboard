@@ -3,6 +3,7 @@
   <head>
     <title>Zest IFS Clipboard Manager</title>
     <link rel="stylesheet" href="/css/styles.css">
+    <script src="/js/xlsx-full-min.js"></script>
     <script src="/js/sidePanel.js"></script>
   </head>
   <body>
@@ -12,6 +13,13 @@
       <div class="section-title">IFS Clipboard Records</div>
       <div id="clipboard-data-table">
         <p>Loading clipboard records...</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Export Data</div>
+      <div id="export-container">
+        <button id="export-excel" class="export-btn">Export to Excel</button>
       </div>
     </div>
 

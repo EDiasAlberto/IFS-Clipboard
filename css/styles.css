@@ -138,3 +138,40 @@ tr:hover {
 .show-more-btn:hover {
   background-color: #004488;
 }
+
+.export-btn {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 150px;
+}
+
+.export-btn:hover {
+  background-color: #45a049;
+}
+
+#export-container {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.export-btn::before {
+  content: '';
+  background-image: url('/img/excel-icon.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  display: inline-block;
+}
