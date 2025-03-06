@@ -47,6 +47,108 @@ document.addEventListener("DOMContentLoaded", function () {
   // Add click event to export button
   exportButton.addEventListener("click", exportToExcel);
   
+  // Function to import data from Excel file
+  function importFromExcel() {
+    // Create a hidden file input element
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.xlsx, .xls, .csv';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    // Trigger click on file input
+    fileInput.click();
+
+    // Handle file selection
+    fileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          // Parse workbook
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, {type: 'array'});
+          
+          // Get first sheet
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Convert to JSON
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+          
+          // Extract headers from first row
+          if (jsonData.length === 0) {
+            alert("The Excel file appears to be empty");
+            return;
+          }
+          
+          const headers = jsonData[0];
+          
+          // Convert to clipboard data format
+          const clipboardData = [];
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (row.length === 0) continue; // Skip empty rows
+            
+            const rowData = {};
+            for (let j = 0; j < headers.length; j++) {
+              if (headers[j]) { // Skip empty headers
+                rowData[headers[j]] = j < row.length ? row[j] : "";
+              }
+            }
+            clipboardData.push(rowData);
+          }
+          
+          // Update current clipboard data
+          currentClipboardData = clipboardData;
+          
+          // Update the UI
+          renderTable(clipboardData);
+          
+          console.log("Excel import completed successfully");
+          alert(`Imported ${clipboardData.length} rows successfully`);
+        } catch (error) {
+          console.error("Error importing from Excel:", error);
+          alert("Failed to import Excel data: " + error.message);
+        } finally {
+          // Remove the file input element
+          document.body.removeChild(fileInput);
+        }
+      };
+      
+      reader.onerror = function() {
+        alert("Failed to read the file");
+        document.body.removeChild(fileInput);
+      };
+      
+      // Read the file as an array buffer
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // Add import button next to export button
+  function addImportButton() {
+    // Create import button with same styling as export
+    const importButton = document.createElement('button');
+    importButton.id = 'import-excel';
+    importButton.className = exportButton.className; // Use the same styling
+    importButton.textContent = 'Import Data';
+    
+    // Insert import button before export button
+    exportButton.parentNode.insertBefore(importButton, exportButton);
+    
+    // Add margin between buttons
+    exportButton.style.marginLeft = '10px';
+    
+    // Add event listener
+    importButton.addEventListener('click', importFromExcel);
+  }
+
+  // Add import button
+  addImportButton();
+  
   // Function to render table with data from storage
   function renderTable(records) {
     // Store the current data for export functionality
