@@ -175,3 +175,17 @@ tr:hover {
   margin-right: 8px;
   display: inline-block;
 }
+
+.current-record {
+  border-left: 3px solid #4CAF50 !important;
+}
+
+.current-version-badge {
+  background-color: #4CAF50;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  margin-right: 8px;
+  user-select: none;
+}

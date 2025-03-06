@@ -11,6 +11,7 @@ class HistoryManager {
     this.historyItems = [];
     this.MAX_HISTORY_ITEMS = 10;
     this.expandedHistoryTables = new Set();
+    this.currentRecords = null; // Track current clipboard state
   }
   
   /**
@@ -18,6 +19,9 @@ class HistoryManager {
    * @param {Array} records - Current clipboard records
    */
   updateHistory(records) {
+    // Save the current records
+    this.currentRecords = records;
+    
     // Convert records to string for comparison
     const recordsString = JSON.stringify(records);
     
@@ -50,6 +54,9 @@ class HistoryManager {
       }
       
       // Update history display
+      this.renderHistory();
+    } else if (this.previousRecords === null) {
+      // First time - just render the history with the current data
       this.renderHistory();
     }
     
@@ -189,36 +196,62 @@ class HistoryManager {
    * Render history items in the container
    */
   renderHistory() {
-    if (this.historyItems.length === 0) {
-      this.historyContainer.innerHTML = "<p>No history available yet</p>";
-      return;
-    }
-    
+    // Start with an empty history container
     let historyHTML = '';
     
-    this.historyItems.forEach((item, index) => {
-      // Create a unique ID for the expandable content
-      const expandId = `history-expand-${index}`;
-      const restoreId = `history-restore-${index}`;
-      const historyTableId = `history-table-${index}`;
+    // First, add the current records section if we have current records
+    if (this.currentRecords && this.currentRecords.length > 0) {
+      const currentExpandId = 'current-record-expand';
+      const currentTableId = 'current-record-table';
       
-      // Check if this history item was expanded
-      const wasExpanded = document.getElementById(expandId)?.style.display === 'block';
+      // Check if this section was expanded
+      const wasCurrentExpanded = document.getElementById(currentExpandId)?.style.display === 'block';
       
       historyHTML += `
-        <div class="history-item">
-          <div class="history-header" data-expand="${expandId}">
-            <div class="history-timestamp">${item.timestamp}</div>
-            <div class="history-content">${item.summary}</div>
-            <div class="restore-btn" id="${restoreId}">Restore</div>
-            <div class="expand-icon ${wasExpanded ? 'expand-icon-up' : 'expand-icon-down'}"></div>
+        <div class="history-item current-record">
+          <div class="history-header" data-expand="${currentExpandId}">
+            <div class="history-timestamp">CURRENT VERSION</div>
+            <div class="history-content">${this.currentRecords.length} record(s)</div>
+            <div class="current-version-badge">Current</div>
+            <div class="expand-icon ${wasCurrentExpanded ? 'expand-icon-up' : 'expand-icon-down'}"></div>
           </div>
-          <div id="${expandId}" class="history-details" style="display: ${wasExpanded ? 'block' : 'none'};">
-            ${this.createHistoryDetailsTable(item.data, index)}
+          <div id="${currentExpandId}" class="history-details" style="display: ${wasCurrentExpanded ? 'block' : 'none'};">
+            ${this.createHistoryDetailsTable(this.currentRecords, 'current')}
           </div>
         </div>
       `;
-    });
+    }
+    
+    // Then add regular history items
+    if (this.historyItems.length === 0) {
+      if (!this.currentRecords || this.currentRecords.length === 0) {
+        historyHTML = "<p>No history available yet</p>";
+      }
+    } else {
+      this.historyItems.forEach((item, index) => {
+        // Create a unique ID for the expandable content
+        const expandId = `history-expand-${index}`;
+        const restoreId = `history-restore-${index}`;
+        const historyTableId = `history-table-${index}`;
+        
+        // Check if this history item was expanded
+        const wasExpanded = document.getElementById(expandId)?.style.display === 'block';
+        
+        historyHTML += `
+          <div class="history-item">
+            <div class="history-header" data-expand="${expandId}">
+              <div class="history-timestamp">${item.timestamp}</div>
+              <div class="history-content">${item.summary}</div>
+              <div class="restore-btn" id="${restoreId}">Restore</div>
+              <div class="expand-icon ${wasExpanded ? 'expand-icon-up' : 'expand-icon-down'}"></div>
+            </div>
+            <div id="${expandId}" class="history-details" style="display: ${wasExpanded ? 'block' : 'none'};">
+              ${this.createHistoryDetailsTable(item.data, index)}
+            </div>
+          </div>
+        `;
+      });
+    }
     
     this.historyContainer.innerHTML = historyHTML;
     
@@ -252,7 +285,7 @@ class HistoryManager {
       });
     });
     
-    // Add click handlers for restore buttons
+    // Add click handlers for restore buttons (only for actual history items, not current)
     this.historyItems.forEach((item, index) => {
       const restoreBtn = document.getElementById(`history-restore-${index}`);
       if (restoreBtn) {
