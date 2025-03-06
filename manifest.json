@@ -5,10 +5,7 @@
   "background": {
       "service_worker": "/js/service-worker.js"
    },
-  "description": "Displays memory usage information from the current page",
-  "action": {
-    "default_icon": "dog.png"
-  },
+  "description": "Keeps track of IFS clipboard history",
   "side_panel": {
     "default_path": "/html/sidepanel.html"
   },
