@@ -101,11 +101,28 @@ document.addEventListener("DOMContentLoaded", function () {
             clipboardData.push(rowData);
           }
           
-          // Update current clipboard data
+          // Update current clipboard data in memory
           currentClipboardData = clipboardData;
           
-          // Update the UI
+          // Update UI by rendering the table
           renderTable(clipboardData);
+          
+          // Store data in Chrome storage
+          const jsonString = JSON.stringify(clipboardData);
+          chrome.storage.local.set({
+            "IFS-Aurena-CopyPasteRecordStorage": jsonString
+          });
+          
+          // Also update the website's localStorage
+          chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+            if (tabs[0]) {
+              chrome.scripting.executeScript({
+                target: { tabId: tabs[0].id },
+                function: updatePageLocalStorage,
+                args: [jsonString]
+              });
+            }
+          });
           
           console.log("Excel import completed successfully");
           alert(`Imported ${clipboardData.length} rows successfully`);
