@@ -19,7 +19,7 @@ body {
   border-radius: 4px;
   margin: 16px;
   padding: 16px;
-  overflow: auto;
+  overflow: visible; /* Allow content to determine size */
 }
 
 .section-title {
@@ -56,6 +56,8 @@ tr:hover {
   margin-bottom: 8px;
   border-left: 3px solid #003366;
   background-color: #fff;
+  border-radius: 3px;
+  /* Remove overflow:hidden from here */
 }
 
 .history-header {
@@ -64,6 +66,9 @@ tr:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background-color: #fff;
+  position: relative; /* For proper stacking */
+  z-index: 2;
 }
 
 .history-header:hover {
@@ -104,6 +109,45 @@ tr:hover {
   padding: 0 8px 8px 8px;
   border-top: 1px solid #eee;
   background-color: #fdfdfd;
+  overflow-x: auto; /* Keep horizontal scrolling */
+  max-width: 100%;
+  position: relative; /* For proper layering */
+  min-width: calc(100% - 16px); /* Account for padding */
+}
+
+/* Make tables in history details responsive */
+.history-details table {
+  width: 100%;
+  table-layout: auto; /* Change from fixed to auto */
+  min-width: 100%; /* Ensure table takes up full width */
+}
+
+.history-details table th,
+.history-details table td {
+  white-space: normal; /* Allow text wrapping */
+  word-break: break-word; /* Break long words only when necessary */
+  max-width: none; /* Remove max-width restriction */
+}
+
+/* Set minimum widths for columns to prevent excessive squishing */
+.history-details table th {
+  min-width: 100px; /* Minimum column width */
+}
+
+/* Improve scrollbar aesthetics */
+.history-details::-webkit-scrollbar {
+  height: 10px;
+  background-color: #f5f5f5;
+}
+
+.history-details::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 5px;
+  border: 2px solid #f5f5f5;
+}
+
+.history-details::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
 }
 
 .restore-btn {
@@ -114,6 +158,8 @@ tr:hover {
   font-size: 0.8em;
   cursor: pointer;
   margin-right: 8px;
+  white-space: nowrap; /* Prevent wrapping */
+  flex-shrink: 0; /* Prevent button from shrinking */
 }
 
 .restore-btn:hover {
@@ -188,4 +234,5 @@ tr:hover {
   font-size: 0.8em;
   margin-right: 8px;
   user-select: none;
+  white-space: nowrap; /* Prevent wrapping */
 }
