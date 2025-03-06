@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Clipboard Access Permission</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .header {
+      background-color: #003366;
+      color: white;
+      padding: 12px 16px;
+      margin: -20px -20px 20px -20px;
+      border-radius: 8px 8px 0 0;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    
+    .site-info {
+      display: flex;
+      align-items: center;
+      margin: 20px 0;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      border-left: 4px solid #003366;
+    }
+    
+    .site-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    
+    .site-url {
+      font-weight: bold;
+      word-break: break-all;
+    }
+    
+    .message {
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    
+    .buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+    
+    .btn-allow {
+      background-color: #003366;
+      color: white;
+    }
+    
+    .btn-allow:hover {
+      background-color: #004488;
+    }
+    
+    .btn-deny {
+      background-color: #f5f5f5;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+    
+    .btn-deny:hover {
+      background-color: #e8e8e8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">Zest IFS Clipboard Manager</div>
+    
+    <div class="message">
+      <p>This extension would like to access the shared clipboard for the following site:</p>
+    </div>
+    
+    <div class="site-info">
+      <img class="site-icon" id="site-icon" src="/img/globe-icon.svg" alt="Site icon">
+      <span class="site-url" id="site-url">Loading...</span>
+    </div>
+    
+    <div class="message">
+      <p>Allowing access will enable you to:</p>
+      <ul>
+        <li>Copy data between different IFS environments</li>
+        <li>Maintain clipboard history across tabs</li>
+        <li>Export and import clipboard data</li>
+      </ul>
+    </div>
+    
+    <div class="buttons">
+      <button class="btn btn-deny" id="deny-button">Deny</button>
+      <button class="btn btn-allow" id="allow-button">Allow</button>
+    </div>
+  </div>
+
+  <script src="/js/permission.js"></script>
+</body>
+</html>
