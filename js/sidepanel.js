@@ -16,133 +16,50 @@ document.addEventListener("DOMContentLoaded", function () {
   let mainTableExpanded = false;
   let expandedHistoryTables = new Set();
   
-  // Function to export data to Excel
-  function exportToExcel() {
-    if (!currentClipboardData || currentClipboardData.length === 0) {
-      alert("No clipboard data available to export");
-      return;
-    }
-    
-    try {
-      // Create a new workbook
-      const wb = XLSX.utils.book_new();
-      
-      // Convert clipboard data to worksheet
-      const ws = XLSX.utils.json_to_sheet(currentClipboardData);
-      
-      // Add the worksheet to the workbook
-      XLSX.utils.book_append_sheet(wb, ws, "Clipboard Data");
-      
-      // Generate Excel file with current timestamp in filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      XLSX.writeFile(wb, `IFS_Clipboard_Export_${timestamp}.xlsx`);
-      
-      console.log("Excel export completed successfully");
-    } catch (error) {
-      console.error("Error exporting to Excel:", error);
-      alert("Failed to export data: " + error.message);
-    }
+  // Function to handle Excel export via the utility
+  function handleExportToExcel() {
+    ExcelUtils.exportToExcel(currentClipboardData)
+      .catch(error => {
+        alert("Failed to export data: " + error.message);
+      });
   }
   
   // Add click event to export button
-  exportButton.addEventListener("click", exportToExcel);
+  exportButton.addEventListener("click", handleExportToExcel);
   
-  // Function to import data from Excel file
-  function importFromExcel() {
-    // Create a hidden file input element
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.xlsx, .xls, .csv';
-    fileInput.style.display = 'none';
-    document.body.appendChild(fileInput);
-
-    // Trigger click on file input
-    fileInput.click();
-
-    // Handle file selection
-    fileInput.addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          // Parse workbook
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, {type: 'array'});
-          
-          // Get first sheet
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          
-          // Convert to JSON
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
-          
-          // Extract headers from first row
-          if (jsonData.length === 0) {
-            alert("The Excel file appears to be empty");
-            return;
+  // Function to handle Excel import via the utility
+  function handleImportFromExcel() {
+    ExcelUtils.importFromExcel()
+      .then(clipboardData => {
+        // Update current clipboard data in memory
+        currentClipboardData = clipboardData;
+        
+        // Update UI by rendering the table
+        renderTable(clipboardData);
+        
+        // Store data in Chrome storage
+        const jsonString = JSON.stringify(clipboardData);
+        chrome.storage.local.set({
+          "IFS-Aurena-CopyPasteRecordStorage": jsonString
+        });
+        
+        // Also update the website's localStorage
+        chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+          if (tabs[0]) {
+            chrome.scripting.executeScript({
+              target: { tabId: tabs[0].id },
+              function: ExcelUtils.updatePageLocalStorage,
+              args: [jsonString]
+            });
           }
-          
-          const headers = jsonData[0];
-          
-          // Convert to clipboard data format
-          const clipboardData = [];
-          for (let i = 1; i < jsonData.length; i++) {
-            const row = jsonData[i];
-            if (row.length === 0) continue; // Skip empty rows
-            
-            const rowData = {};
-            for (let j = 0; j < headers.length; j++) {
-              if (headers[j]) { // Skip empty headers
-                rowData[headers[j]] = j < row.length ? row[j] : "";
-              }
-            }
-            clipboardData.push(rowData);
-          }
-          
-          // Update current clipboard data in memory
-          currentClipboardData = clipboardData;
-          
-          // Update UI by rendering the table
-          renderTable(clipboardData);
-          
-          // Store data in Chrome storage
-          const jsonString = JSON.stringify(clipboardData);
-          chrome.storage.local.set({
-            "IFS-Aurena-CopyPasteRecordStorage": jsonString
-          });
-          
-          // Also update the website's localStorage
-          chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-            if (tabs[0]) {
-              chrome.scripting.executeScript({
-                target: { tabId: tabs[0].id },
-                function: updatePageLocalStorage,
-                args: [jsonString]
-              });
-            }
-          });
-          
-          console.log("Excel import completed successfully");
-          alert(`Imported ${clipboardData.length} rows successfully`);
-        } catch (error) {
-          console.error("Error importing from Excel:", error);
-          alert("Failed to import Excel data: " + error.message);
-        } finally {
-          // Remove the file input element
-          document.body.removeChild(fileInput);
-        }
-      };
-      
-      reader.onerror = function() {
-        alert("Failed to read the file");
-        document.body.removeChild(fileInput);
-      };
-      
-      // Read the file as an array buffer
-      reader.readAsArrayBuffer(file);
-    });
+        });
+        
+        console.log("Excel import completed successfully");
+        alert(`Imported ${clipboardData.length} rows successfully`);
+      })
+      .catch(error => {
+        alert("Failed to import Excel data: " + error.message);
+      });
   }
 
   // Add import button next to export button
@@ -160,7 +77,7 @@ document.addEventListener("DOMContentLoaded", function () {
     exportButton.style.marginLeft = '10px';
     
     // Add event listener
-    importButton.addEventListener('click', importFromExcel);
+    importButton.addEventListener('click', handleImportFromExcel);
   }
 
   // Add import button
@@ -321,7 +238,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (tabs[0]) {
         chrome.scripting.executeScript({
           target: { tabId: tabs[0].id },
-          function: updatePageLocalStorage,
+          function: ExcelUtils.updatePageLocalStorage,
           args: [JSON.stringify(historyData)]
         });
       }
@@ -331,18 +248,6 @@ document.addEventListener("DOMContentLoaded", function () {
     renderTable(historyData);
     
     console.log("Restored clipboard state from history", historyData);
-  }
-  
-  // This function runs in the context of the webpage
-  function updatePageLocalStorage(jsonData) {
-    try {
-      localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", jsonData);
-      console.log("Successfully restored data to page localStorage");
-      return true;
-    } catch (error) {
-      console.error("Failed to update page localStorage:", error);
-      return false;
-    }
   }
   
   // Function to create a table for history details
