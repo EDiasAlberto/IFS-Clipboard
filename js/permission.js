@@ -10,9 +10,10 @@ document.addEventListener('DOMContentLoaded', function() {
   chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
     const currentTab = tabs[0];
     if (currentTab) {
-      // Display site URL
+      // Extract and display just the domain part of the URL
       const url = new URL(currentTab.url);
-      siteUrlElement.textContent = url.hostname;
+      const domain = url.hostname;
+      siteUrlElement.textContent = domain;
       
       // Try to get the site favicon
       if (currentTab.favIconUrl) {
@@ -28,11 +29,13 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
       const currentTab = tabs[0];
       if (currentTab) {
+        // Extract just the domain part of the URL
+        const url = new URL(currentTab.url);
+        const domain = url.hostname;
+        
         // Get existing allowed domains
         chrome.storage.local.get('allowedDomains', function(result) {
           const allowedDomains = result.allowedDomains || [];
-          const url = new URL(currentTab.url);
-          const domain = url.hostname;
           
           // Add domain if not already in list
           if (!allowedDomains.includes(domain)) {

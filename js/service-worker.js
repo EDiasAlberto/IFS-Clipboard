@@ -82,6 +82,7 @@ async function checkAndSetSidePanelPage() {
         return;
       }
       
+      // Extract just the domain part of the URL
       const url = new URL(currentTab.url);
       const domain = url.hostname;
       

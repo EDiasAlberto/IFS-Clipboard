@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", function () {
   chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
     const currentTab = tabs[0];
     if (currentTab && !currentTab.url.startsWith('chrome://')) {
+      // Extract just the domain part of the URL
       const url = new URL(currentTab.url);
       const domain = url.hostname;
       
