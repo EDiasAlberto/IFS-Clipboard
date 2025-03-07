@@ -76,30 +76,70 @@ function importFromExcel() {
           // Convert to JSON
           const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
           
-          // Extract headers from first row
-          if (jsonData.length === 0) {
-            reject(new Error("The Excel file appears to be empty"));
-            document.body.removeChild(fileInput);
-            return;
-          }
+          // Process the data...
+          // This should be your existing processing code that converts Excel data
+          // to the format expected by your clipboard
+          const clipboardData = processExcelData(jsonData);
           
-          const headers = jsonData[0];
+          // NEW CODE: Sync the imported data across tabs
+          const jsonString = JSON.stringify(clipboardData);
           
-          // Convert to clipboard data format
-          const clipboardData = [];
-          for (let i = 1; i < jsonData.length; i++) {
-            const row = jsonData[i];
-            if (row.length === 0) continue; // Skip empty rows
-            
-            const rowData = {};
-            for (let j = 0; j < headers.length; j++) {
-              if (headers[j]) { // Skip empty headers
-                rowData[headers[j]] = j < row.length ? row[j] : "";
-              }
+          // Get metadata from current tab if available
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs && tabs.length > 0) {
+              const activeTab = tabs[0];
+              chrome.scripting.executeScript({
+                target: { tabId: activeTab.id },
+                function: function() {
+                  return localStorage.getItem("TcclClipboardMetadata");
+                }
+              }, (results) => {
+                let metadata = null;
+                if (results && results[0] && results[0].result) {
+                  metadata = results[0].result;
+                }
+                
+                // First sync to active tab immediately to prevent race conditions
+                chrome.scripting.executeScript({
+                  target: { tabId: activeTab.id },
+                  function: function(data, meta) {
+                    try {
+                      localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
+                      if (meta) {
+                        localStorage.setItem("TcclClipboardMetadata", meta);
+                      }
+                      return true;
+                    } catch (error) {
+                      console.error("Error updating active tab after Excel import:", error);
+                      return false;
+                    }
+                  },
+                  args: [jsonString, metadata]
+                });
+                
+                // Sync to all tabs using the background tab approach
+                if (typeof window.syncClipboardViaBackgroundTab === "function") {
+                  // Use the global sync function
+                  window.syncClipboardViaBackgroundTab(jsonString, metadata);
+                  console.log("Excel import synced across tabs using background tab sync");
+                } else {
+                  // Fall back to the service worker method
+                  console.warn("Background tab sync function not available, using fallback method");
+                  
+                  // Use the message passing API to sync via service worker
+                  chrome.runtime.sendMessage({
+                    action: "syncClipboardData",
+                    data: jsonString,
+                    metadata: metadata
+                  }, function(response) {
+                    console.log("Excel import sync status:", response?.message || "Unknown");
+                  });
+                }
+              });
             }
-            clipboardData.push(rowData);
-          }
+          });
           
+          // Resolve the promise with the processed data
           resolve(clipboardData);
         } catch (error) {
           console.error("Error importing from Excel:", error);
@@ -119,6 +159,34 @@ function importFromExcel() {
       reader.readAsArrayBuffer(file);
     });
   });
+}
+
+// Helper function to process Excel data into clipboard format
+// This should match your existing logic for converting Excel data
+function processExcelData(jsonData) {
+  if (!jsonData || jsonData.length < 2) {
+    return [];
+  }
+  
+  // Extract headers from first row
+  const headers = jsonData[0];
+  
+  // Convert to clipboard data format
+  const clipboardData = [];
+  for (let i = 1; i < jsonData.length; i++) {
+    const row = jsonData[i];
+    if (row.length === 0) continue; // Skip empty rows
+    
+    const rowData = {};
+    for (let j = 0; j < headers.length; j++) {
+      if (headers[j]) { // Skip empty headers
+        rowData[headers[j]] = j < row.length ? row[j] : "";
+      }
+    }
+    clipboardData.push(rowData);
+  }
+  
+  return clipboardData;
 }
 
 /**
