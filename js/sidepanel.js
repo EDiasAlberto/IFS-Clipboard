@@ -326,6 +326,7 @@ document.addEventListener("DOMContentLoaded", function () {
           let syncOperationsTotal = trustedTabs.length;
           let syncOperationsCompleted = 0;
 
+          metadata = metadata ? JSON.parse(metadata) : null;
           // Process each trusted tab
           trustedTabs.forEach((tab) => {
             // Create a new URL with our sync fragment
