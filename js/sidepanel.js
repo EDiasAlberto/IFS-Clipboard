@@ -244,6 +244,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 renderTable(parsedRecords);
 
                 // Sync using background tab approach instead of direct sync
+                if (!metadata) {
+                  console.log("what is going on ");
+                }
                 syncViaBackgroundTab(records, metadata);
               }
             } catch (e) {
