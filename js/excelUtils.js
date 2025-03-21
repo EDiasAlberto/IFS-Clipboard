@@ -4,8 +4,8 @@
 
 /**
  * Exports data to Excel
- * @param {Array} data - Array of objects to export
- * @returns {Promise} - Promise that resolves when export is complete
+ * @param {Array<Object>} data - Array of objects to export
+ * @returns {Promise<void>} - Promise that resolves when export is complete
  */
 function exportToExcel(data) {
   return new Promise((resolve, reject) => {
@@ -39,7 +39,7 @@ function exportToExcel(data) {
 
 /**
  * Imports data from Excel file
- * @returns {Promise} - Promise that resolves with the imported data
+ * @returns {Promise<Array<Object>>} - Promise that resolves with the imported data
  */
 function importFromExcel() {
   return new Promise((resolve, reject) => {
@@ -53,7 +53,10 @@ function importFromExcel() {
     // Trigger click on file input
     fileInput.click();
 
-    // Handle file selection
+    /**
+     * Handles the file selection event
+     * @param {Event} e - The change event
+     */
     fileInput.addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) {
@@ -63,6 +66,11 @@ function importFromExcel() {
       }
 
       const reader = new FileReader();
+      
+      /**
+       * Handles successful file load
+       * @param {ProgressEvent} e - The load event
+       */
       reader.onload = function(e) {
         try {
           // Parse workbook
@@ -76,44 +84,64 @@ function importFromExcel() {
           // Convert to JSON
           const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
           
-          // Process the data...
-          // This should be your existing processing code that converts Excel data
-          // to the format expected by your clipboard
+          // Process the data
           const clipboardData = processExcelData(jsonData);
           
           // NEW CODE: Sync the imported data across tabs
           const jsonString = JSON.stringify(clipboardData);
           
-          // Get metadata from current tab if available
+          /**
+           * Callback for tab query
+           * @param {Array<chrome.tabs.Tab>} tabs - Array of tabs matching the query
+           */
           chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             if (tabs && tabs.length > 0) {
               const activeTab = tabs[0];
+              
+              /**
+               * Function to retrieve metadata from active tab
+               * @return {string|null} The metadata from localStorage or null
+               */
+              function getTabMetadata() {
+                return localStorage.getItem("TcclClipboardMetadata");
+              }
+              
+              /**
+               * Callback for metadata retrieval
+               * @param {Array} results - Results from script execution
+               */
               chrome.scripting.executeScript({
                 target: { tabId: activeTab.id },
-                function: function() {
-                  return localStorage.getItem("TcclClipboardMetadata");
-                }
+                function: getTabMetadata
               }, (results) => {
                 let metadata = null;
                 if (results && results[0] && results[0].result) {
                   metadata = results[0].result;
                 }
                 
+                /**
+                 * Function to update localStorage in active tab
+                 * @param {string} data - JSON string to store
+                 * @param {string|null} meta - Metadata to store
+                 * @return {boolean} Success status
+                 */
+                function updateActiveTabStorage(data, meta) {
+                  try {
+                    localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
+                    if (meta) {
+                      localStorage.setItem("TcclClipboardMetadata", meta);
+                    }
+                    return true;
+                  } catch (error) {
+                    console.error("Error updating active tab after Excel import:", error);
+                    return false;
+                  }
+                }
+                
                 // First sync to active tab immediately to prevent race conditions
                 chrome.scripting.executeScript({
                   target: { tabId: activeTab.id },
-                  function: function(data, meta) {
-                    try {
-                      localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
-                      if (meta) {
-                        localStorage.setItem("TcclClipboardMetadata", meta);
-                      }
-                      return true;
-                    } catch (error) {
-                      console.error("Error updating active tab after Excel import:", error);
-                      return false;
-                    }
-                  },
+                  function: updateActiveTabStorage,
                   args: [jsonString, metadata]
                 });
                 
@@ -126,14 +154,20 @@ function importFromExcel() {
                   // Fall back to the service worker method
                   console.warn("Background tab sync function not available, using fallback method");
                   
+                  /**
+                   * Callback for sync response
+                   * @param {Object} response - Response from service worker
+                   */
+                  function handleSyncResponse(response) {
+                    console.log("Excel import sync status:", response?.message || "Unknown");
+                  }
+                  
                   // Use the message passing API to sync via service worker
                   chrome.runtime.sendMessage({
                     action: "syncClipboardData",
                     data: jsonString,
                     metadata: metadata
-                  }, function(response) {
-                    console.log("Excel import sync status:", response?.message || "Unknown");
-                  });
+                  }, handleSyncResponse);
                 }
               });
             }
@@ -150,6 +184,9 @@ function importFromExcel() {
         }
       };
       
+      /**
+       * Handles file read errors
+       */
       reader.onerror = function() {
         document.body.removeChild(fileInput);
         reject(new Error("Failed to read the file"));
@@ -161,8 +198,11 @@ function importFromExcel() {
   });
 }
 
-// Helper function to process Excel data into clipboard format
-// This should match your existing logic for converting Excel data
+/**
+ * Processes Excel data into clipboard format
+ * @param {Array<Array>} jsonData - 2D array of Excel data (rows and columns)
+ * @returns {Array<Object>} Processed data in clipboard format with named properties
+ */
 function processExcelData(jsonData) {
   if (!jsonData || jsonData.length < 2) {
     return [];
@@ -205,7 +245,6 @@ function updatePageLocalStorage(jsonData) {
   }
 }
 
-// Function should remain but now only for direct in-page calls
 // Export functions for use in other modules
 window.ExcelUtils = {
   exportToExcel,

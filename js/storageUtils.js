@@ -13,6 +13,10 @@ class StorageUtils {
     return new Promise((resolve, reject) => {
       try {
         // First, get metadata from the active tab
+        /**
+         * Query callback for retrieving active tab
+         * @param {chrome.tabs.Tab[]} tabs - Array of tabs matching the query
+         */
         chrome.tabs.query(
           { active: true, currentWindow: true },
           function (tabs) {
@@ -34,17 +38,27 @@ class StorageUtils {
               return;
             }
 
+            /**
+             * Function executed in tab context to retrieve metadata
+             * @return {string|null} The metadata string from localStorage or null
+             */
+            function getMetadataFromTab() {
+              // Get the metadata if it exists
+              const metadata = localStorage.getItem(
+                "TcclClipboardMetadata",
+              );
+              return metadata;
+            }
+
             chrome.scripting.executeScript(
               {
                 target: { tabId: activeTab.id },
-                function: function () {
-                  // Get the metadata if it exists
-                  const metadata = localStorage.getItem(
-                    "TcclClipboardMetadata",
-                  );
-                  return metadata;
-                },
+                function: getMetadataFromTab,
               },
+              /**
+               * Callback handling metadata retrieval results
+               * @param {Array} results - Results from script execution
+               */
               (results) => {
                 let metadata = null;
                 if (results && results[0] && results[0].result) {
@@ -86,6 +100,9 @@ class StorageUtils {
       storageData["TcclClipboardMetadata"] = metadata;
     }
 
+    /**
+     * Callback after setting local storage
+     */
     chrome.storage.local.set(storageData, () => {
       if (chrome.runtime.lastError) {
         reject(
@@ -96,7 +113,10 @@ class StorageUtils {
         return;
       }
 
-      // Then get all trusted domains
+      /**
+       * Callback after retrieving allowed domains
+       * @param {Object} result - Storage result containing allowedDomains
+       */
       chrome.storage.local.get("allowedDomains", function (result) {
         const allowedDomains = result.allowedDomains || [];
 
@@ -105,12 +125,19 @@ class StorageUtils {
           return;
         }
 
-        // Get all tabs
+        /**
+         * Callback after querying all tabs
+         * @param {chrome.tabs.Tab[]} tabs - Array of all browser tabs
+         */
         chrome.tabs.query({}, (tabs) => {
           console.log("Found total tabs:", tabs.length);
 
-          // Filter tabs matching trusted domains
-          const trustedTabs = tabs.filter((tab) => {
+          /**
+           * Filter function to identify trusted tabs
+           * @param {chrome.tabs.Tab} tab - Tab to check if trusted
+           * @return {boolean} True if the tab is from a trusted domain
+           */
+          const trustedTabsFilter = (tab) => {
             if (
               !tab.url ||
               (!tab.url.startsWith("http://") &&
@@ -144,7 +171,10 @@ class StorageUtils {
               console.error(`Error checking tab ${tab.id}:`, e);
               return false;
             }
-          });
+          };
+
+          // Filter tabs matching trusted domains
+          const trustedTabs = tabs.filter(trustedTabsFilter);
 
           console.log("Trusted tabs found:", trustedTabs.length);
 
@@ -160,6 +190,41 @@ class StorageUtils {
 
           var SyncMetadata = metadata ? JSON.parse(metadata) : null;
           console.log(SyncMetadata);
+          
+          /**
+           * Function executed in tab context to update localStorage
+           * @param {string} data - The clipboard data to store
+           * @param {Object|null} meta - The metadata to store
+           * @return {Object} Result object indicating success/failure and details
+           */
+          function updateTabStorage(data, meta) {
+            try {
+              // Update the clipboard data
+              localStorage.setItem(
+                "IFS-Aurena-CopyPasteRecordStorage",
+                data,
+              );
+
+              // Update metadata if provided
+              if (meta) {
+                localStorage.setItem("TcclClipboardMetadata", meta);
+              }
+
+              return {
+                success: true,
+                domain: location.hostname,
+                url: location.href,
+              };
+            } catch (error) {
+              console.error("Storage update failed:", error);
+              return {
+                success: false,
+                error: error.message,
+                url: location.href,
+              };
+            }
+          }
+
           // Update localStorage for each tab
           trustedTabs.forEach((tab) => {
             console.log(
@@ -169,35 +234,13 @@ class StorageUtils {
             chrome.scripting.executeScript(
               {
                 target: { tabId: tab.id },
-                function: function (data, meta) {
-                  try {
-                    // Update the clipboard data
-                    localStorage.setItem(
-                      "IFS-Aurena-CopyPasteRecordStorage",
-                      data,
-                    );
-
-                    // Update metadata if provided
-                    if (meta) {
-                      localStorage.setItem("TcclClipboardMetadata", meta);
-                    }
-
-                    return {
-                      success: true,
-                      domain: location.hostname,
-                      url: location.href,
-                    };
-                  } catch (error) {
-                    console.error("Storage update failed:", error);
-                    return {
-                      success: false,
-                      error: error.message,
-                      url: location.href,
-                    };
-                  }
-                },
+                function: updateTabStorage,
                 args: [jsonData, SyncMetadata],
               },
+              /**
+               * Callback after executing script in a tab
+               * @param {Array} results - Results from script execution
+               */
               (results) => {
                 completed++;
 

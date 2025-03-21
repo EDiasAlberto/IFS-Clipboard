@@ -1,31 +1,56 @@
+/**
+ * Side panel implementation for IFS Clipboard Extension
+ * Provides UI for viewing and managing clipboard data across trusted domains
+ */
+
+/**
+ * Initialize the side panel when DOM is fully loaded
+ * @listens DOMContentLoaded
+ */
 document.addEventListener("DOMContentLoaded", function () {
-  // Check if current site is allowed
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    const currentTab = tabs[0];
-    if (currentTab && !currentTab.url.startsWith("chrome://")) {
-      // Extract just the domain part of the URL
-      const url = new URL(currentTab.url);
-      const domain = url.hostname;
+  /**
+   * Check if current site is allowed to use the extension
+   * Redirects to permission page if site is not trusted
+   */
+  chrome.tabs.query({ active: true, currentWindow: true }, 
+    /**
+     * Callback after retrieving the active tab
+     * @param {Array<chrome.tabs.Tab>} tabs - Array of matching tabs (should be length 1)
+     */
+    function (tabs) {
+      const currentTab = tabs[0];
+      if (currentTab && !currentTab.url.startsWith("chrome://")) {
+        // Extract just the domain part of the URL
+        const url = new URL(currentTab.url);
+        const domain = url.hostname;
 
-      chrome.storage.local.get("allowedDomains", function (result) {
-        const allowedDomains = result.allowedDomains || [];
+        /**
+         * Callback after retrieving allowed domains from storage
+         * @param {Object} result - Storage result containing allowedDomains
+         * @param {Array<string>} [result.allowedDomains] - List of allowed domains
+         */
+        chrome.storage.local.get("allowedDomains", function (result) {
+          const allowedDomains = result.allowedDomains || [];
 
-        if (!allowedDomains.includes(domain)) {
-          // If somehow reached this page without permission, redirect back
-          window.location.href = "/html/permission.html";
-          return;
-        }
+          if (!allowedDomains.includes(domain)) {
+            // If somehow reached this page without permission, redirect back
+            window.location.href = "/html/permission.html";
+            return;
+          }
 
-        // Continue with the rest of your sidepanel initialization
+          // Continue with the rest of your sidepanel initialization
+          initializeSidePanel();
+        });
+      } else {
+        // For chrome:// URLs or when no tab is active
         initializeSidePanel();
-      });
-    } else {
-      // For chrome:// URLs or when no tab is active
-      initializeSidePanel();
-    }
-  });
+      }
+    });
 
-  // Wrap all your existing initialization code in this function
+  /**
+   * Main function to initialize the side panel UI and functionality
+   * Sets up event listeners, clipboard monitoring, and data display
+   */
   function initializeSidePanel() {
     // Reference to containers
     const tableContainer = document.getElementById("clipboard-data-table");
@@ -46,48 +71,91 @@ document.addEventListener("DOMContentLoaded", function () {
     // Initialize history manager
     const historyManager = new HistoryManager(historyContainer, renderTable);
 
-    // Function to handle Excel export via the utility
+    /**
+     * Handles exporting current clipboard data to Excel
+     * Uses the ExcelUtils utility to perform the export
+     * @listens click
+     */
     function handleExportToExcel() {
-      ExcelUtils.exportToExcel(currentClipboardData).catch((error) => {
-        alert("Failed to export data: " + error.message);
-      });
+      ExcelUtils.exportToExcel(currentClipboardData).catch(
+        /**
+         * Error handler for export failures
+         * @param {Error} error - The export error
+         */
+        (error) => {
+          alert("Failed to export data: " + error.message);
+        }
+      );
     }
 
     // Add click event to export button
     exportButton.addEventListener("click", handleExportToExcel);
 
-    // Function to handle Excel import via the utility
+    /**
+     * Handles importing clipboard data from Excel
+     * Uses the ExcelUtils utility to perform the import
+     * @listens click
+     */
     function handleImportFromExcel() {
       ExcelUtils.importFromExcel()
-        .then((clipboardData) => {
-          // Update current clipboard data in memory
-          currentClipboardData = clipboardData;
+        .then(
+          /**
+           * Success handler for import
+           * @param {Array<Object>} clipboardData - The imported data
+           */
+          (clipboardData) => {
+            // Update current clipboard data in memory
+            currentClipboardData = clipboardData;
 
-          // Update UI by rendering the table
-          renderTable(clipboardData);
+            // Update UI by rendering the table
+            renderTable(clipboardData);
 
-          // Sync to all trusted domains
-          const jsonString = JSON.stringify(clipboardData);
-          StorageUtils.updateAcrossTrustedDomains(jsonString)
-            .then((result) => {
-              console.log("Excel import completed successfully");
-              console.log(`Sync status: ${result.message}`);
-              alert(`Imported ${clipboardData.length} rows successfully`);
-            })
-            .catch((error) => {
-              console.error("Sync error:", error);
-              // Still show success since the import itself worked
-              alert(
-                `Imported ${clipboardData.length} rows successfully, but sync had issues`,
+            // Sync to all trusted domains
+            const jsonString = JSON.stringify(clipboardData);
+            StorageUtils.updateAcrossTrustedDomains(jsonString)
+              .then(
+                /**
+                 * Success handler for sync operation
+                 * @param {Object} result - The sync result
+                 * @param {boolean} result.success - Whether sync was successful
+                 * @param {string} result.message - Status message
+                 */
+                (result) => {
+                  console.log("Excel import completed successfully");
+                  console.log(`Sync status: ${result.message}`);
+                  alert(`Imported ${clipboardData.length} rows successfully`);
+                }
+              )
+              .catch(
+                /**
+                 * Error handler for sync failures
+                 * @param {Error} error - The sync error
+                 */
+                (error) => {
+                  console.error("Sync error:", error);
+                  // Still show success since the import itself worked
+                  alert(
+                    `Imported ${clipboardData.length} rows successfully, but sync had issues`
+                  );
+                }
               );
-            });
-        })
-        .catch((error) => {
-          alert("Failed to import Excel data: " + error.message);
-        });
+          }
+        )
+        .catch(
+          /**
+           * Error handler for import failures
+           * @param {Error} error - The import error
+           */
+          (error) => {
+            alert("Failed to import Excel data: " + error.message);
+          }
+        );
     }
 
-    // Add import button next to export button
+    /**
+     * Creates and adds the import button to the UI
+     * Places it next to the export button with consistent styling
+     */
     function addImportButton() {
       // Create import button with same styling as export
       const importButton = document.createElement("button");
@@ -108,7 +176,11 @@ document.addEventListener("DOMContentLoaded", function () {
     // Add import button
     addImportButton();
 
-    // Function to render table with data from storage
+    /**
+     * Renders the clipboard data table in the UI
+     * Handles empty states, table headers, and "Show More" functionality
+     * @param {Array<Object>} records - The clipboard records to display
+     */
     function renderTable(records) {
       // Store the current data for export functionality
       currentClipboardData = records;
@@ -126,9 +198,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // Create header row
       tableHTML += "<tr>";
-      headers.forEach((header) => {
-        tableHTML += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">${header}</th>`;
-      });
+      headers.forEach(
+        /**
+         * Process each header for the table
+         * @param {string} header - The header name
+         */
+        (header) => {
+          tableHTML += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">${header}</th>`;
+        }
+      );
       tableHTML += "</tr>";
 
       // Determine if we need to show the "Show More" button
@@ -136,29 +214,53 @@ document.addEventListener("DOMContentLoaded", function () {
       const needsShowMore = records.length > initialRowsToShow;
 
       // Create data rows for the initial visible set
-      records.slice(0, initialRowsToShow).forEach((record) => {
-        tableHTML += "<tr>";
-        headers.forEach((header) => {
-          const cellValue = record[header] !== undefined ? record[header] : "";
-          tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">${cellValue}</td>`;
-        });
-        tableHTML += "</tr>";
-      });
+      records.slice(0, initialRowsToShow).forEach(
+        /**
+         * Process each record for the visible rows
+         * @param {Object} record - The clipboard record
+         */
+        (record) => {
+          tableHTML += "<tr>";
+          headers.forEach(
+            /**
+             * Process each cell in the row
+             * @param {string} header - The column header
+             */
+            (header) => {
+              const cellValue = record[header] !== undefined ? record[header] : "";
+              tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">${cellValue}</td>`;
+            }
+          );
+          tableHTML += "</tr>";
+        }
+      );
 
       // Create data rows for the hidden set (with a different class)
       if (needsShowMore) {
         // Use the saved expanded state to determine initial display
         const hiddenStyle = mainTableExpanded ? "table-row-group" : "none";
         tableHTML += `<tbody id="hidden-rows" style="display: ${hiddenStyle};">`;
-        records.slice(initialRowsToShow).forEach((record) => {
-          tableHTML += "<tr>";
-          headers.forEach((header) => {
-            const cellValue =
-              record[header] !== undefined ? record[header] : "";
-            tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">${cellValue}</td>`;
-          });
-          tableHTML += "</tr>";
-        });
+        records.slice(initialRowsToShow).forEach(
+          /**
+           * Process each record for the hidden rows
+           * @param {Object} record - The clipboard record
+           */
+          (record) => {
+            tableHTML += "<tr>";
+            headers.forEach(
+              /**
+               * Process each cell in the hidden row
+               * @param {string} header - The column header
+               */
+              (header) => {
+                const cellValue =
+                  record[header] !== undefined ? record[header] : "";
+                tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">${cellValue}</td>`;
+              }
+            );
+            tableHTML += "</tr>";
+          }
+        );
         tableHTML += `</tbody>`;
       }
 
@@ -186,22 +288,30 @@ document.addEventListener("DOMContentLoaded", function () {
       if (needsShowMore) {
         document
           .getElementById("show-more-btn")
-          .addEventListener("click", function () {
-            const hiddenRows = document.getElementById("hidden-rows");
-            const showMoreBtn = document.getElementById("show-more-btn");
+          .addEventListener("click", 
+            /**
+             * Handles the show more/less button click
+             * Toggles visibility of additional rows
+             * @param {Event} event - Click event
+             * @listens click
+             */
+            function () {
+              const hiddenRows = document.getElementById("hidden-rows");
+              const showMoreBtn = document.getElementById("show-more-btn");
 
-            if (hiddenRows.style.display === "none") {
-              // Show the hidden rows
-              hiddenRows.style.display = "table-row-group";
-              showMoreBtn.textContent = "Show Less";
-              mainTableExpanded = true;
-            } else {
-              // Hide the rows again
-              hiddenRows.style.display = "none";
-              showMoreBtn.textContent = `Show More (${records.length - initialRowsToShow} more rows)`;
-              mainTableExpanded = false;
+              if (hiddenRows.style.display === "none") {
+                // Show the hidden rows
+                hiddenRows.style.display = "table-row-group";
+                showMoreBtn.textContent = "Show Less";
+                mainTableExpanded = true;
+              } else {
+                // Hide the rows again
+                hiddenRows.style.display = "none";
+                showMoreBtn.textContent = `Show More (${records.length - initialRowsToShow} more rows)`;
+                mainTableExpanded = false;
+              }
             }
-          });
+          );
       } else {
         // Reset expanded state if there are no rows to show
         mainTableExpanded = false;
@@ -211,7 +321,10 @@ document.addEventListener("DOMContentLoaded", function () {
       historyManager.updateHistory(records);
     }
 
-    // Function to check for updates in local storage
+    /**
+     * Checks for clipboard data updates in extension storage
+     * Updates UI and syncs with other tabs when changes are detected
+     */
     function checkLocalStorage() {
       // Skip checking if a sync operation is in progress
       if (syncInProgress) {
@@ -221,6 +334,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
       chrome.storage.local.get(
         ["IFS-Aurena-CopyPasteRecordStorage", "TcclClipboardMetadata"],
+        /**
+         * Callback after retrieving clipboard data from storage
+         * @param {Object} result - Storage items retrieved
+         * @param {string} [result.IFS-Aurena-CopyPasteRecordStorage] - Clipboard data JSON string
+         * @param {string} [result.TcclClipboardMetadata] - Metadata JSON string
+         */
         function (result) {
           const records = result["IFS-Aurena-CopyPasteRecordStorage"];
           const metadata = result["TcclClipboardMetadata"];
@@ -265,183 +384,294 @@ document.addEventListener("DOMContentLoaded", function () {
             // Initialize history if no previous records
             historyManager.initHistory();
           }
-        },
+        }
       );
     }
 
-    // New function to sync data via a background tab
+    /**
+     * Syncs clipboard data to all trusted domains using background tabs
+     * Creates temporary tabs for each trusted domain to update their localStorage
+     * @param {string} records - JSON string of clipboard records
+     * @param {string} metadata - JSON string of clipboard metadata
+     */
     function syncViaBackgroundTab(records, metadata) {
       // Set the flag to prevent polling
       syncInProgress = true;
 
       // First get all trusted domains
-      chrome.storage.local.get("allowedDomains", function (result) {
-        const allowedDomains = result.allowedDomains || [];
+      chrome.storage.local.get("allowedDomains", 
+        /**
+         * Callback after retrieving allowed domains
+         * @param {Object} result - Storage result containing allowedDomains
+         * @param {Array<string>} [result.allowedDomains] - List of allowed domains
+         */
+        function (result) {
+          const allowedDomains = result.allowedDomains || [];
 
-        if (allowedDomains.length === 0) {
-          console.log("No trusted domains to sync to");
-          syncInProgress = false; // Reset flag since we're done
-          return;
-        }
-
-        // Get all tabs to find ones that match our trusted domains
-        chrome.tabs.query({}, function (tabs) {
-          const trustedTabs = tabs.filter((tab) => {
-            if (
-              !tab.url ||
-              (!tab.url.startsWith("http://") &&
-                !tab.url.startsWith("https://"))
-            ) {
-              return false;
-            }
-
-            try {
-              const url = new URL(tab.url);
-              const hostname = url.hostname;
-
-              // Check if tab belongs to a trusted domain
-              for (const domain of allowedDomains) {
-                if (hostname.includes(domain) || domain.includes(hostname)) {
-                  // Skip tabs that already have our sync fragment
-                  if (tab.url.includes("#ifs-clipboard-sync")) {
-                    return false;
-                  }
-                  return true;
-                }
-              }
-              return false;
-            } catch (e) {
-              return false;
-            }
-          });
-
-          // If no trusted tabs, reset flag and exit
-          if (trustedTabs.length === 0) {
-            console.log("No trusted tabs to sync to");
-            syncInProgress = false;
+          if (allowedDomains.length === 0) {
+            console.log("No trusted domains to sync to");
+            syncInProgress = false; // Reset flag since we're done
             return;
           }
 
-          // Track how many sync operations are completed
-          let syncOperationsTotal = trustedTabs.length;
-          let syncOperationsCompleted = 0;
+          // Get all tabs to find ones that match our trusted domains
+          chrome.tabs.query({}, 
+            /**
+             * Callback after retrieving all tabs
+             * @param {Array<chrome.tabs.Tab>} tabs - All browser tabs
+             */
+            function (tabs) {
+              /**
+               * Filter function to identify trusted tabs
+               * @param {chrome.tabs.Tab} tab - Tab to check
+               * @returns {boolean} Whether the tab is from a trusted domain
+               */
+              const trustedTabs = tabs.filter((tab) => {
+                if (
+                  !tab.url ||
+                  (!tab.url.startsWith("http://") &&
+                    !tab.url.startsWith("https://"))
+                ) {
+                  return false;
+                }
 
-          metadata = metadata ? JSON.parse(metadata) : null;
-          // Process each trusted tab
-          trustedTabs.forEach((tab) => {
-            // Create a new URL with our sync fragment
-            const syncUrl = tab.url + "/#ifs-clipboard-sync";
+                try {
+                  const url = new URL(tab.url);
+                  const hostname = url.hostname;
 
-            // Create a background tab with the sync URL
-            chrome.tabs.create(
-              { url: syncUrl, active: false },
-              function (newTab) {
-                // Execute script to update localStorage in this background tab
-                chrome.scripting.executeScript(
-                  {
-                    target: { tabId: newTab.id },
-                    function: function (data, meta) {
-                      try {
-                        // Update localStorage with our data
-                        localStorage.setItem(
-                          "IFS-Aurena-CopyPasteRecordStorage",
-                          " " + data,
-                        );
-                        if (meta) {
-                          localStorage.setItem("TcclClipboardMetadata", meta);
-                        }
-                        console.log(
-                          "[IFS Clipboard] Sync completed via background tab",
-                        );
-                        return true;
-                      } catch (error) {
-                        console.error(
-                          "[IFS Clipboard] Background tab sync failed:",
-                          error,
-                        );
+                  // Check if tab belongs to a trusted domain
+                  for (const domain of allowedDomains) {
+                    if (hostname.includes(domain) || domain.includes(hostname)) {
+                      // Skip tabs that already have our sync fragment
+                      if (tab.url.includes("#ifs-clipboard-sync")) {
                         return false;
                       }
-                    },
-                    args: [records, metadata],
-                  },
-                  () => {
-                    // Wait a short time to ensure data is saved before closing
-                    setTimeout(() => {
-                      // Close the background tab
-                      chrome.tabs.remove(newTab.id, function () {
-                        console.log(`Background sync tab closed: ${newTab.id}`);
+                      return true;
+                    }
+                  }
+                  return false;
+                } catch (e) {
+                  return false;
+                }
+              });
 
-                        // Track completion and reset flag when all operations are done
-                        syncOperationsCompleted++;
-                        if (syncOperationsCompleted === syncOperationsTotal) {
-                          console.log(
-                            "All sync operations completed, resuming polling",
+              // If no trusted tabs, reset flag and exit
+              if (trustedTabs.length === 0) {
+                console.log("No trusted tabs to sync to");
+                syncInProgress = false;
+                return;
+              }
+
+              // Track how many sync operations are completed
+              let syncOperationsTotal = trustedTabs.length;
+              let syncOperationsCompleted = 0;
+
+              metadata = metadata ? JSON.parse(metadata) : null;
+              // Process each trusted tab
+              trustedTabs.forEach(
+                /**
+                 * Process each trusted tab for syncing
+                 * @param {chrome.tabs.Tab} tab - Trusted tab to sync with
+                 */
+                (tab) => {
+                  // Create a new URL with our sync fragment
+                  const syncUrl = tab.url + "/#ifs-clipboard-sync";
+
+                  // Create a background tab with the sync URL
+                  chrome.tabs.create(
+                    { url: syncUrl, active: false },
+                    /**
+                     * Callback after creating background tab
+                     * @param {chrome.tabs.Tab} newTab - The created background tab
+                     */
+                    function (newTab) {
+                      // Execute script to update localStorage in this background tab
+                      chrome.scripting.executeScript(
+                        {
+                          target: { tabId: newTab.id },
+                          /**
+                           * Function executed in background tab context to update localStorage
+                           * @param {string} data - JSON string to store
+                           * @param {Object|null} meta - Metadata to store
+                           * @returns {boolean} Success status
+                           */
+                          function: function (data, meta) {
+                            try {
+                              // Update localStorage with our data
+                              localStorage.setItem(
+                                "IFS-Aurena-CopyPasteRecordStorage",
+                                " " + data
+                              );
+                              if (meta) {
+                                localStorage.setItem("TcclClipboardMetadata", meta);
+                              }
+                              console.log(
+                                "[IFS Clipboard] Sync completed via background tab"
+                              );
+                              return true;
+                            } catch (error) {
+                              console.error(
+                                "[IFS Clipboard] Background tab sync failed:",
+                                error
+                              );
+                              return false;
+                            }
+                          },
+                          args: [records, metadata],
+                        },
+                        /**
+                         * Callback after script execution
+                         */
+                        () => {
+                          // Wait a short time to ensure data is saved before closing
+                          setTimeout(
+                            /**
+                             * Timeout callback to close the tab after data is saved
+                             */
+                            () => {
+                              // Close the background tab
+                              chrome.tabs.remove(
+                                newTab.id, 
+                                /**
+                                 * Callback after tab is closed
+                                 */
+                                function () {
+                                  console.log(`Background sync tab closed: ${newTab.id}`);
+
+                                  // Track completion and reset flag when all operations are done
+                                  syncOperationsCompleted++;
+                                  if (syncOperationsCompleted === syncOperationsTotal) {
+                                    console.log(
+                                      "All sync operations completed, resuming polling"
+                                    );
+                                    syncInProgress = false;
+                                  }
+                                }
+                              );
+                            }, 
+                            500
                           );
-                          syncInProgress = false;
                         }
-                      });
-                    }, 500);
-                  },
-                );
-              },
-            );
-          });
-        });
-      });
+                      );
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
     }
 
-    // Make the function available globally for HistoryManager
+    /**
+     * Makes the background tab sync function available globally
+     * Used by other modules like HistoryManager
+     * @param {string} recordsStr - JSON string of clipboard records
+     * @param {string} metadata - JSON string of clipboard metadata
+     */
     window.syncClipboardViaBackgroundTab = function (recordsStr, metadata) {
       syncViaBackgroundTab(recordsStr, metadata);
     };
 
+    /**
+     * Loads and displays the list of trusted domains
+     * Renders the domains with remove buttons
+     */
     function loadTrustedDomains() {
       const domainsContainer = document.getElementById("domains-container");
 
-      chrome.storage.local.get("allowedDomains", function (result) {
-        const allowedDomains = result.allowedDomains || [];
+      chrome.storage.local.get("allowedDomains", 
+        /**
+         * Callback after retrieving allowed domains
+         * @param {Object} result - Storage result containing allowedDomains
+         * @param {Array<string>} [result.allowedDomains] - List of allowed domains
+         */
+        function (result) {
+          const allowedDomains = result.allowedDomains || [];
 
-        if (allowedDomains.length === 0) {
-          domainsContainer.innerHTML = "<p>No trusted domains added yet.</p>";
-          return;
+          if (allowedDomains.length === 0) {
+            domainsContainer.innerHTML = "<p>No trusted domains added yet.</p>";
+            return;
+          }
+
+          let domainsHtml = '<ul class="domains-list">';
+          allowedDomains.forEach(
+            /**
+             * Process each domain for display
+             * @param {string} domain - Domain name
+             */
+            (domain) => {
+              domainsHtml += `
+                <li class="domain-item">
+                  <span class="domain-name">${domain}</span>
+                  <button class="domain-remove" data-domain="${domain}">Remove</button>
+                </li>
+              `;
+            }
+          );
+          domainsHtml += "</ul>";
+
+          domainsContainer.innerHTML = domainsHtml;
+
+          // Add event listeners for remove buttons
+          document.querySelectorAll(".domain-remove").forEach(
+            /**
+             * Add click handler to each remove button
+             * @param {HTMLElement} button - Remove button element
+             */
+            (button) => {
+              button.addEventListener("click", 
+                /**
+                 * Handle click on remove domain button
+                 * @param {Event} event - Click event
+                 * @listens click
+                 */
+                function () {
+                  const domainToRemove = this.getAttribute("data-domain");
+                  removeTrustedDomain(domainToRemove);
+                }
+              );
+            }
+          );
         }
-
-        let domainsHtml = '<ul class="domains-list">';
-        allowedDomains.forEach((domain) => {
-          domainsHtml += `
-            <li class="domain-item">
-              <span class="domain-name">${domain}</span>
-              <button class="domain-remove" data-domain="${domain}">Remove</button>
-            </li>
-          `;
-        });
-        domainsHtml += "</ul>";
-
-        domainsContainer.innerHTML = domainsHtml;
-
-        // Add event listeners for remove buttons
-        document.querySelectorAll(".domain-remove").forEach((button) => {
-          button.addEventListener("click", function () {
-            const domainToRemove = this.getAttribute("data-domain");
-            removeTrustedDomain(domainToRemove);
-          });
-        });
-      });
+      );
     }
 
+    /**
+     * Removes a domain from the trusted domains list
+     * Updates storage and refreshes the domains display
+     * @param {string} domain - Domain to remove from trusted list
+     */
     function removeTrustedDomain(domain) {
-      chrome.storage.local.get("allowedDomains", function (result) {
-        const allowedDomains = result.allowedDomains || [];
-        const updatedDomains = allowedDomains.filter((d) => d !== domain);
+      chrome.storage.local.get("allowedDomains", 
+        /**
+         * Callback after retrieving allowed domains
+         * @param {Object} result - Storage result containing allowedDomains
+         * @param {Array<string>} [result.allowedDomains] - List of allowed domains
+         */
+        function (result) {
+          const allowedDomains = result.allowedDomains || [];
+          const updatedDomains = allowedDomains.filter(
+            /**
+             * Filter function to remove the specified domain
+             * @param {string} d - Domain to check
+             * @returns {boolean} Whether to keep this domain
+             */
+            (d) => d !== domain
+          );
 
-        chrome.storage.local.set(
-          { allowedDomains: updatedDomains },
-          function () {
-            console.log("Domain removed from trusted list:", domain);
-            loadTrustedDomains(); // Reload the list
-          },
-        );
-      });
+          chrome.storage.local.set(
+            { allowedDomains: updatedDomains },
+            /**
+             * Callback after saving updated domains
+             */
+            function () {
+              console.log("Domain removed from trusted list:", domain);
+              loadTrustedDomains(); // Reload the list
+            }
+          );
+        }
+      );
     }
 
     // Call this in your initialization

@@ -2,7 +2,10 @@
 // allows the user to open the sidepanel by clicking the extension icon
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
-// Set up a polling function to check browser's local storage
+/**
+ * Polls the active tab for local storage data if it's from a trusted domain
+ * Checks current tab's URL against allowed domains and retrieves clipboard data if trusted
+ */
 function pollLocalStorage() {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (
@@ -40,7 +43,11 @@ function pollLocalStorage() {
   });
 }
 
-// Function to be executed in the context of the page
+/**
+ * Retrieves clipboard storage data from the page's localStorage
+ * Executed in the context of a web page via executeScript
+ * @return {void} No return value, sends message to extension with storage data
+ */
 function getLocalStorageItems() {
   const recordsString = localStorage.getItem(
     "IFS-Aurena-CopyPasteRecordStorage",
@@ -96,7 +103,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// Function to check permissions and set the appropriate sidepanel page
+/**
+ * Checks if the current active tab is from a trusted domain and sets appropriate sidepanel
+ * @return {Promise<void>} A promise that resolves when the sidepanel is set
+ */
 async function checkAndSetSidePanelPage() {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -161,7 +171,11 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ allowedDomains: [] });
 });
 
-// Function to be executed in the context of the page to watch for localStorage changes
+/**
+ * Overrides localStorage.setItem method to monitor for clipboard data changes
+ * Executed in the context of a web page via executeScript
+ * @return {void} No return value, sends message to extension when clipboard data changes
+ */
 function watchStorageChanges() {
   // Save the original setItem method
   const originalSetItem = localStorage.setItem;
@@ -472,7 +486,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Other handlers...
 });
 
-// Function to sync data to all trusted tabs
+/**
+ * Syncs clipboard data to all tabs from trusted domains
+ * @param {string} clipboardData - The clipboard data to sync
+ * @param {string|null} metadata - The metadata associated with the clipboard data
+ * @param {number|null} sourceTabId - The ID of the tab that triggered the sync (to avoid syncing back to it)
+ * @param {function|null} sendResponse - Callback function to send response to the message sender
+ * @return {void} No direct return value, uses sendResponse callback for async response
+ */
 function syncToAllTrustedTabs(
   clipboardData,
   metadata,
