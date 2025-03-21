@@ -4,6 +4,11 @@
  */
 
 class HistoryManager {
+  /**
+   * Initialize a new HistoryManager
+   * @param {HTMLElement} historyContainer - DOM element to render history in
+   * @param {Function} renderCallback - Callback function to render clipboard data
+   */
   constructor(historyContainer, renderCallback) {
     this.historyContainer = historyContainer;
     this.renderCallback = renderCallback;
@@ -16,7 +21,7 @@ class HistoryManager {
 
   /**
    * Update history when records change
-   * @param {Array} records - Current clipboard records
+   * @param {Array<Object>} records - Current clipboard records
    */
   updateHistory(records) {
     // Save the current records
@@ -69,8 +74,8 @@ class HistoryManager {
 
   /**
    * Restore a previous clipboard state
-   * @param {Array} historyData - Data to restore
-   * @returns {Promise} - Promise that resolves when restoration is complete
+   * @param {Array<Object>} historyData - Data to restore
+   * @returns {Promise<Array<Object>>} - Promise that resolves with the restored data or rejects with an error
    */
   restoreFromHistory(historyData) {
     if (!historyData) return Promise.reject(new Error("No history data"));
@@ -78,6 +83,10 @@ class HistoryManager {
     return new Promise((resolve, reject) => {
       try {
         // Get current metadata before restoring from history
+        /**
+         * Query for active tab to retrieve metadata
+         * @param {Array<chrome.tabs.Tab>} tabs - Array of tabs matching the query
+         */
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
           if (!tabs || tabs.length === 0) {
             // No active tab, proceed without metadata
@@ -87,13 +96,23 @@ class HistoryManager {
 
           const activeTab = tabs[0];
 
+          /**
+           * Function executed in tab context to retrieve metadata
+           * @returns {string|null} The metadata from localStorage or null
+           */
+          function getTabMetadata() {
+            return localStorage.getItem("TcclClipboardMetadata");
+          }
+
           // Try to get metadata from the active tab
+          /**
+           * Callback for metadata retrieval
+           * @param {Array} results - Results from script execution
+           */
           chrome.scripting.executeScript(
             {
               target: { tabId: activeTab.id },
-              function: function () {
-                return localStorage.getItem("TcclClipboardMetadata");
-              },
+              function: getTabMetadata
             },
             (results) => {
               let metadata = null;
@@ -111,43 +130,69 @@ class HistoryManager {
     });
   }
 
-  // Helper method to continue the restore process with metadata
+  /**
+   * Helper method to continue the restore process with metadata
+   * @param {Array<Object>} historyData - The data to restore
+   * @param {string|null} metadata - The metadata to include with the restored data
+   * @param {Function} resolve - Promise resolve function
+   * @param {Function} reject - Promise reject function
+   * @private
+   */
   continueRestore(historyData, metadata, resolve, reject) {
     try {
       // Call the render callback with the restored data
       if (this.renderCallback) {
         this.renderCallback(historyData);
       }
-      // Helper method to continue the restore process with metadata
-      // Immediately update the active tab's localStorage to prevent polling race condition
+      
+      /**
+       * Query for active tab to update localStorage
+       * @param {Array<chrome.tabs.Tab>} tabs - Array of tabs matching the query
+       */
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs && tabs.length > 0) {
           const activeTab = tabs[0];
           const jsonString = JSON.stringify(historyData);
-          chrome.scripting
-            .executeScript({
+          
+          /**
+           * Function to update localStorage in the active tab
+           * @param {string} data - JSON string to store
+           * @param {string|null} meta - Metadata to store
+           * @returns {boolean} Success indicator
+           */
+          function updateTabStorage(data, meta) {
+            try {
+              localStorage.setItem(
+                "IFS-Aurena-CopyPasteRecordStorage",
+                data,
+              );
+              if (meta) {
+                localStorage.setItem("TcclClipboardMetadata", meta);
+              }
+              return true;
+            } catch (error) {
+              console.error(
+                "Error updating active tab's localStorage:",
+                error,
+              );
+              return false;
+            }
+          }
+          
+          /**
+           * Error handler for script execution
+           * @param {Error} error - The error that occurred
+           */
+          function handleScriptError(error) {
+            console.error("Failed to update active tab:", error);
+          }
+          
+          chrome.scripting.executeScript({
               target: { tabId: activeTab.id },
-              func: (data, meta) => {
-                try {
-                  localStorage.setItem(
-                    "IFS-Aurena-CopyPasteRecordStorage",
-                    data,
-                  );
-                  if (meta) {
-                    localStorage.setItem("TcclClipboardMetadata", meta);
-                  }
-                } catch (error) {
-                  console.error(
-                    "Error updating active tab's localStorage:",
-                    error,
-                  );
-                }
-              },
-              args: [jsonString, metadata],
+              function: updateTabStorage,
+              args: [jsonString, metadata]
             })
-            .catch((error) => {
-              console.error("Failed to update active tab:", error);
-            });
+            .catch(handleScriptError);
         }
       });
 
@@ -168,17 +213,30 @@ class HistoryManager {
         console.warn(
           "Background tab sync function not available, using fallback method",
         );
+        
+        /**
+         * Handle successful sync
+         * @param {Object} result - The sync result
+         */
+        function handleSyncSuccess(result) {
+          console.log("Restored clipboard state from history", historyData);
+          console.log(`Sync status: ${result.message}`);
+          resolve(historyData);
+        }
+        
+        /**
+         * Handle sync error
+         * @param {Error} err - The error that occurred
+         */
+        function handleSyncError(err) {
+          console.error("Sync error during history restore:", err);
+          // Still resolve since the local restore worked
+          resolve(historyData);
+        }
+        
         StorageUtils.updateAcrossTrustedDomains(jsonString)
-          .then((result) => {
-            console.log("Restored clipboard state from history", historyData);
-            console.log(`Sync status: ${result.message}`);
-            resolve(historyData);
-          })
-          .catch((err) => {
-            console.error("Sync error during history restore:", err);
-            // Still resolve since the local restore worked
-            resolve(historyData);
-          });
+          .then(handleSyncSuccess)
+          .catch(handleSyncError);
       }
     } catch (err) {
       console.error("Error during history restore:", err);
@@ -188,9 +246,9 @@ class HistoryManager {
 
   /**
    * Create a table for history details
-   * @param {Array} records - Records to display
-   * @param {Number} historyIndex - Index of the history item
-   * @returns {String} - HTML for the table
+   * @param {Array<Object>} records - Records to display
+   * @param {number|string} historyIndex - Index or identifier of the history item
+   * @returns {string} - HTML for the table
    */
   createHistoryDetailsTable(records, historyIndex) {
     if (!records || records.length === 0) {
@@ -270,6 +328,7 @@ class HistoryManager {
 
   /**
    * Render history items in the container
+   * Updates the DOM with current history state
    */
   renderHistory() {
     // Start with an empty history container
@@ -339,10 +398,15 @@ class HistoryManager {
 
   /**
    * Add event listeners to history elements
+   * Sets up expand/collapse, restore, and show more/less functionality
    */
   addEventListeners() {
     // Add click handlers for expandable history items
     document.querySelectorAll(".history-header").forEach((header) => {
+      /**
+       * Handle click on history header to expand/collapse
+       * @param {Event} e - Click event
+       */
       header.addEventListener("click", (e) => {
         // Don't expand if clicked on the restore button
         if (e.target.classList.contains("restore-btn")) return;
@@ -367,6 +431,10 @@ class HistoryManager {
     this.historyItems.forEach((item, index) => {
       const restoreBtn = document.getElementById(`history-restore-${index}`);
       if (restoreBtn) {
+        /**
+         * Handle click on restore button
+         * @param {Event} e - Click event
+         */
         restoreBtn.addEventListener("click", (e) => {
           e.stopPropagation(); // Prevent triggering the expand/collapse
           this.restoreFromHistory(item.data);
@@ -376,6 +444,10 @@ class HistoryManager {
 
     // Add click handlers for the Show More buttons in history tables
     document.querySelectorAll(".show-more-history-btn").forEach((btn) => {
+      /**
+       * Handle click on show more/less button
+       * @param {Event} e - Click event
+       */
       btn.addEventListener("click", (e) => {
         e.stopPropagation(); // Prevent event bubbling
 
@@ -400,6 +472,7 @@ class HistoryManager {
 
   /**
    * Initialize history if needed
+   * Sets up initial state if history is empty
    */
   initHistory() {
     if (this.previousRecords === null) {
