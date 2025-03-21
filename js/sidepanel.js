@@ -12,7 +12,8 @@ document.addEventListener("DOMContentLoaded", function () {
    * Check if current site is allowed to use the extension
    * Redirects to permission page if site is not trusted
    */
-  chrome.tabs.query({ active: true, currentWindow: true }, 
+  chrome.tabs.query(
+    { active: true, currentWindow: true },
     /**
      * Callback after retrieving the active tab
      * @param {Array<chrome.tabs.Tab>} tabs - Array of matching tabs (should be length 1)
@@ -45,7 +46,8 @@ document.addEventListener("DOMContentLoaded", function () {
         // For chrome:// URLs or when no tab is active
         initializeSidePanel();
       }
-    });
+    },
+  );
 
   /**
    * Main function to initialize the side panel UI and functionality
@@ -84,7 +86,7 @@ document.addEventListener("DOMContentLoaded", function () {
          */
         (error) => {
           alert("Failed to export data: " + error.message);
-        }
+        },
       );
     }
 
@@ -124,7 +126,7 @@ document.addEventListener("DOMContentLoaded", function () {
                   console.log("Excel import completed successfully");
                   console.log(`Sync status: ${result.message}`);
                   alert(`Imported ${clipboardData.length} rows successfully`);
-                }
+                },
               )
               .catch(
                 /**
@@ -135,11 +137,11 @@ document.addEventListener("DOMContentLoaded", function () {
                   console.error("Sync error:", error);
                   // Still show success since the import itself worked
                   alert(
-                    `Imported ${clipboardData.length} rows successfully, but sync had issues`
+                    `Imported ${clipboardData.length} rows successfully, but sync had issues`,
                   );
-                }
+                },
               );
-          }
+          },
         )
         .catch(
           /**
@@ -148,7 +150,7 @@ document.addEventListener("DOMContentLoaded", function () {
            */
           (error) => {
             alert("Failed to import Excel data: " + error.message);
-          }
+          },
         );
     }
 
@@ -205,7 +207,7 @@ document.addEventListener("DOMContentLoaded", function () {
          */
         (header) => {
           tableHTML += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">${header}</th>`;
-        }
+        },
       );
       tableHTML += "</tr>";
 
@@ -227,12 +229,13 @@ document.addEventListener("DOMContentLoaded", function () {
              * @param {string} header - The column header
              */
             (header) => {
-              const cellValue = record[header] !== undefined ? record[header] : "";
+              const cellValue =
+                record[header] !== undefined ? record[header] : "";
               tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">${cellValue}</td>`;
-            }
+            },
           );
           tableHTML += "</tr>";
-        }
+        },
       );
 
       // Create data rows for the hidden set (with a different class)
@@ -256,10 +259,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 const cellValue =
                   record[header] !== undefined ? record[header] : "";
                 tableHTML += `<td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">${cellValue}</td>`;
-              }
+              },
             );
             tableHTML += "</tr>";
-          }
+          },
         );
         tableHTML += `</tbody>`;
       }
@@ -286,32 +289,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // Add event listener to the Show More button
       if (needsShowMore) {
-        document
-          .getElementById("show-more-btn")
-          .addEventListener("click", 
-            /**
-             * Handles the show more/less button click
-             * Toggles visibility of additional rows
-             * @param {Event} event - Click event
-             * @listens click
-             */
-            function () {
-              const hiddenRows = document.getElementById("hidden-rows");
-              const showMoreBtn = document.getElementById("show-more-btn");
+        document.getElementById("show-more-btn").addEventListener(
+          "click",
+          /**
+           * Handles the show more/less button click
+           * Toggles visibility of additional rows
+           * @param {Event} event - Click event
+           * @listens click
+           */
+          function () {
+            const hiddenRows = document.getElementById("hidden-rows");
+            const showMoreBtn = document.getElementById("show-more-btn");
 
-              if (hiddenRows.style.display === "none") {
-                // Show the hidden rows
-                hiddenRows.style.display = "table-row-group";
-                showMoreBtn.textContent = "Show Less";
-                mainTableExpanded = true;
-              } else {
-                // Hide the rows again
-                hiddenRows.style.display = "none";
-                showMoreBtn.textContent = `Show More (${records.length - initialRowsToShow} more rows)`;
-                mainTableExpanded = false;
-              }
+            if (hiddenRows.style.display === "none") {
+              // Show the hidden rows
+              hiddenRows.style.display = "table-row-group";
+              showMoreBtn.textContent = "Show Less";
+              mainTableExpanded = true;
+            } else {
+              // Hide the rows again
+              hiddenRows.style.display = "none";
+              showMoreBtn.textContent = `Show More (${records.length - initialRowsToShow} more rows)`;
+              mainTableExpanded = false;
             }
-          );
+          },
+        );
       } else {
         // Reset expanded state if there are no rows to show
         mainTableExpanded = false;
@@ -384,7 +386,7 @@ document.addEventListener("DOMContentLoaded", function () {
             // Initialize history if no previous records
             historyManager.initHistory();
           }
-        }
+        },
       );
     }
 
@@ -399,7 +401,8 @@ document.addEventListener("DOMContentLoaded", function () {
       syncInProgress = true;
 
       // First get all trusted domains
-      chrome.storage.local.get("allowedDomains", 
+      chrome.storage.local.get(
+        "allowedDomains",
         /**
          * Callback after retrieving allowed domains
          * @param {Object} result - Storage result containing allowedDomains
@@ -415,7 +418,8 @@ document.addEventListener("DOMContentLoaded", function () {
           }
 
           // Get all tabs to find ones that match our trusted domains
-          chrome.tabs.query({}, 
+          chrome.tabs.query(
+            {},
             /**
              * Callback after retrieving all tabs
              * @param {Array<chrome.tabs.Tab>} tabs - All browser tabs
@@ -441,7 +445,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
                   // Check if tab belongs to a trusted domain
                   for (const domain of allowedDomains) {
-                    if (hostname.includes(domain) || domain.includes(hostname)) {
+                    if (
+                      hostname.includes(domain) ||
+                      domain.includes(hostname)
+                    ) {
                       // Skip tabs that already have our sync fragment
                       if (tab.url.includes("#ifs-clipboard-sync")) {
                         return false;
@@ -466,7 +473,7 @@ document.addEventListener("DOMContentLoaded", function () {
               let syncOperationsTotal = trustedTabs.length;
               let syncOperationsCompleted = 0;
 
-              metadata = metadata ? JSON.parse(metadata) : null;
+              metadata = metadata ? metadata : null;
               // Process each trusted tab
               trustedTabs.forEach(
                 /**
@@ -500,19 +507,22 @@ document.addEventListener("DOMContentLoaded", function () {
                               // Update localStorage with our data
                               localStorage.setItem(
                                 "IFS-Aurena-CopyPasteRecordStorage",
-                                " " + data
+                                " " + data,
                               );
                               if (meta) {
-                                localStorage.setItem("TcclClipboardMetadata", meta);
+                                localStorage.setItem(
+                                  "TcclClipboardMetadata",
+                                  meta,
+                                );
                               }
                               console.log(
-                                "[IFS Clipboard] Sync completed via background tab"
+                                "[IFS Clipboard] Sync completed via background tab",
                               );
                               return true;
                             } catch (error) {
                               console.error(
                                 "[IFS Clipboard] Background tab sync failed:",
-                                error
+                                error,
                               );
                               return false;
                             }
@@ -531,35 +541,40 @@ document.addEventListener("DOMContentLoaded", function () {
                             () => {
                               // Close the background tab
                               chrome.tabs.remove(
-                                newTab.id, 
+                                newTab.id,
                                 /**
                                  * Callback after tab is closed
                                  */
                                 function () {
-                                  console.log(`Background sync tab closed: ${newTab.id}`);
+                                  console.log(
+                                    `Background sync tab closed: ${newTab.id}`,
+                                  );
 
                                   // Track completion and reset flag when all operations are done
                                   syncOperationsCompleted++;
-                                  if (syncOperationsCompleted === syncOperationsTotal) {
+                                  if (
+                                    syncOperationsCompleted ===
+                                    syncOperationsTotal
+                                  ) {
                                     console.log(
-                                      "All sync operations completed, resuming polling"
+                                      "All sync operations completed, resuming polling",
                                     );
                                     syncInProgress = false;
                                   }
-                                }
+                                },
                               );
-                            }, 
-                            500
+                            },
+                            500,
                           );
-                        }
+                        },
                       );
-                    }
+                    },
                   );
-                }
+                },
               );
-            }
+            },
           );
-        }
+        },
       );
     }
 
@@ -580,7 +595,8 @@ document.addEventListener("DOMContentLoaded", function () {
     function loadTrustedDomains() {
       const domainsContainer = document.getElementById("domains-container");
 
-      chrome.storage.local.get("allowedDomains", 
+      chrome.storage.local.get(
+        "allowedDomains",
         /**
          * Callback after retrieving allowed domains
          * @param {Object} result - Storage result containing allowedDomains
@@ -607,7 +623,7 @@ document.addEventListener("DOMContentLoaded", function () {
                   <button class="domain-remove" data-domain="${domain}">Remove</button>
                 </li>
               `;
-            }
+            },
           );
           domainsHtml += "</ul>";
 
@@ -620,7 +636,8 @@ document.addEventListener("DOMContentLoaded", function () {
              * @param {HTMLElement} button - Remove button element
              */
             (button) => {
-              button.addEventListener("click", 
+              button.addEventListener(
+                "click",
                 /**
                  * Handle click on remove domain button
                  * @param {Event} event - Click event
@@ -629,11 +646,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 function () {
                   const domainToRemove = this.getAttribute("data-domain");
                   removeTrustedDomain(domainToRemove);
-                }
+                },
               );
-            }
+            },
           );
-        }
+        },
       );
     }
 
@@ -643,7 +660,8 @@ document.addEventListener("DOMContentLoaded", function () {
      * @param {string} domain - Domain to remove from trusted list
      */
     function removeTrustedDomain(domain) {
-      chrome.storage.local.get("allowedDomains", 
+      chrome.storage.local.get(
+        "allowedDomains",
         /**
          * Callback after retrieving allowed domains
          * @param {Object} result - Storage result containing allowedDomains
@@ -657,7 +675,7 @@ document.addEventListener("DOMContentLoaded", function () {
              * @param {string} d - Domain to check
              * @returns {boolean} Whether to keep this domain
              */
-            (d) => d !== domain
+            (d) => d !== domain,
           );
 
           chrome.storage.local.set(
@@ -668,9 +686,9 @@ document.addEventListener("DOMContentLoaded", function () {
             function () {
               console.log("Domain removed from trusted list:", domain);
               loadTrustedDomains(); // Reload the list
-            }
+            },
           );
-        }
+        },
       );
     }
 

@@ -412,7 +412,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                     result["IFS-Aurena-CopyPasteRecordStorage"];
                   const metadata = result["TcclClipboardMetadata"];
 
-                  var SyncMetadata = metadata ? JSON.parse(metadata) : null;
+                  var SyncMetadata = metadata ? metadata : null;
                   if (clipboardData) {
                     chrome.scripting.executeScript({
                       target: { tabId: tabId },
@@ -500,7 +500,7 @@ function syncToAllTrustedTabs(
   sourceTabId,
   sendResponse = null,
 ) {
-  metadata = metadata ? JSON.parse(metadata) : null;
+  metadata = metadata ? metadata : null;
   chrome.storage.local.get("allowedDomains", function (result) {
     const allowedDomains = result.allowedDomains || [];
     console.log("Allowed domains for sync:", allowedDomains);

@@ -44,9 +44,7 @@ class StorageUtils {
              */
             function getMetadataFromTab() {
               // Get the metadata if it exists
-              const metadata = localStorage.getItem(
-                "TcclClipboardMetadata",
-              );
+              const metadata = localStorage.getItem("TcclClipboardMetadata");
               return metadata;
             }
 
@@ -188,9 +186,9 @@ class StorageUtils {
           let successful = 0;
           let syncResults = [];
 
-          var SyncMetadata = metadata ? JSON.parse(metadata) : null;
+          var SyncMetadata = metadata ? metadata : null;
           console.log(SyncMetadata);
-          
+
           /**
            * Function executed in tab context to update localStorage
            * @param {string} data - The clipboard data to store
@@ -200,10 +198,7 @@ class StorageUtils {
           function updateTabStorage(data, meta) {
             try {
               // Update the clipboard data
-              localStorage.setItem(
-                "IFS-Aurena-CopyPasteRecordStorage",
-                data,
-              );
+              localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
 
               // Update metadata if provided
               if (meta) {
@@ -302,4 +297,3 @@ class StorageUtils {
 
 // Export for use in other modules
 window.StorageUtils = StorageUtils;
-

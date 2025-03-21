@@ -98,7 +98,7 @@ class SyncManager {
       // Get the current clipboard data and metadata from extension storage
       chrome.storage.local.get(
         ["IFS-Aurena-CopyPasteRecordStorage", "TcclClipboardMetadata"],
-        onStorageRetrieved
+        onStorageRetrieved,
       );
     };
 
@@ -112,7 +112,7 @@ class SyncManager {
    * @param {string} metadata - Metadata to sync
    */
   syncToTab(tabId, jsonData, metadata) {
-    metadata = metadata ? JSON.parse(metadata) : null;
+    metadata = metadata ? metadata : null;
 
     /**
      * Function executed in tab context to update localStorage
@@ -129,7 +129,7 @@ class SyncManager {
         }
 
         console.log(
-          "[IFS Clipboard Sync] Successfully synced clipboard data to this environment"
+          "[IFS Clipboard Sync] Successfully synced clipboard data to this environment",
         );
         return true;
       } catch (error) {
@@ -154,9 +154,9 @@ class SyncManager {
       {
         target: { tabId: tabId },
         function: updateTabStorage,
-        args: [jsonData, metadata]
+        args: [jsonData, metadata],
       },
-      onScriptExecuted
+      onScriptExecuted,
     );
   }
 
@@ -203,7 +203,7 @@ class SyncManager {
 
         chrome.storage.local.get(
           ["IFS-Aurena-CopyPasteRecordStorage", "TcclClipboardMetadata"],
-          onStorageRetrieved
+          onStorageRetrieved,
         );
       };
 
@@ -236,4 +236,3 @@ class SyncManager {
 
 // Export the SyncManager class
 window.SyncManager = SyncManager;
-
