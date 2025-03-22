@@ -377,7 +377,6 @@ document.addEventListener("DOMContentLoaded", function () {
           } else if (currentClipboardData !== null) {
             // Only update if we previously had data but now don't
             tableContainer.innerHTML = "<p>No records found in storage</p>";
-            currentClipboardData = null;
             // Initialize history if no previous records
             historyManager.initHistory();
           } else if (!tableContainer.innerHTML) {
@@ -400,182 +399,15 @@ document.addEventListener("DOMContentLoaded", function () {
       // Set the flag to prevent polling
       syncInProgress = true;
 
-      // First get all trusted domains
-      chrome.storage.local.get(
-        "allowedDomains",
-        /**
-         * Callback after retrieving allowed domains
-         * @param {Object} result - Storage result containing allowedDomains
-         * @param {Array<string>} [result.allowedDomains] - List of allowed domains
-         */
-        function (result) {
-          const allowedDomains = result.allowedDomains || [];
-
-          if (allowedDomains.length === 0) {
-            console.log("No trusted domains to sync to");
-            syncInProgress = false; // Reset flag since we're done
-            return;
-          }
-
-          // Get all tabs to find ones that match our trusted domains
-          chrome.tabs.query(
-            {},
-            /**
-             * Callback after retrieving all tabs
-             * @param {Array<chrome.tabs.Tab>} tabs - All browser tabs
-             */
-            function (tabs) {
-              /**
-               * Filter function to identify trusted tabs
-               * @param {chrome.tabs.Tab} tab - Tab to check
-               * @returns {boolean} Whether the tab is from a trusted domain
-               */
-              const trustedTabs = tabs.filter((tab) => {
-                if (
-                  !tab.url ||
-                  (!tab.url.startsWith("http://") &&
-                    !tab.url.startsWith("https://"))
-                ) {
-                  return false;
-                }
-
-                try {
-                  const url = new URL(tab.url);
-                  const hostname = url.hostname;
-
-                  // Check if tab belongs to a trusted domain
-                  for (const domain of allowedDomains) {
-                    if (
-                      hostname.includes(domain) ||
-                      domain.includes(hostname)
-                    ) {
-                      // Skip tabs that already have our sync fragment
-                      if (tab.url.includes("#ifs-clipboard-sync")) {
-                        return false;
-                      }
-                      return true;
-                    }
-                  }
-                  return false;
-                } catch (e) {
-                  return false;
-                }
-              });
-
-              // If no trusted tabs, reset flag and exit
-              if (trustedTabs.length === 0) {
-                console.log("No trusted tabs to sync to");
-                syncInProgress = false;
-                return;
-              }
-
-              // Track how many sync operations are completed
-              let syncOperationsTotal = trustedTabs.length;
-              let syncOperationsCompleted = 0;
-
-              metadata = metadata ? metadata : null;
-              // Process each trusted tab
-              trustedTabs.forEach(
-                /**
-                 * Process each trusted tab for syncing
-                 * @param {chrome.tabs.Tab} tab - Trusted tab to sync with
-                 */
-                (tab) => {
-                  // Create a new URL with our sync fragment
-                  const syncUrl = tab.url + "/#ifs-clipboard-sync";
-
-                  // Create a background tab with the sync URL
-                  chrome.tabs.create(
-                    { url: syncUrl, active: false },
-                    /**
-                     * Callback after creating background tab
-                     * @param {chrome.tabs.Tab} newTab - The created background tab
-                     */
-                    function (newTab) {
-                      // Execute script to update localStorage in this background tab
-                      chrome.scripting.executeScript(
-                        {
-                          target: { tabId: newTab.id },
-                          /**
-                           * Function executed in background tab context to update localStorage
-                           * @param {string} data - JSON string to store
-                           * @param {Object|null} meta - Metadata to store
-                           * @returns {boolean} Success status
-                           */
-                          function: function (data, meta) {
-                            try {
-                              // Update localStorage with our data
-                              localStorage.setItem(
-                                "IFS-Aurena-CopyPasteRecordStorage",
-                                " " + data,
-                              );
-                              if (meta) {
-                                localStorage.setItem(
-                                  "TcclClipboardMetadata",
-                                  meta,
-                                );
-                              }
-                              console.log(
-                                "[IFS Clipboard] Sync completed via background tab",
-                              );
-                              return true;
-                            } catch (error) {
-                              console.error(
-                                "[IFS Clipboard] Background tab sync failed:",
-                                error,
-                              );
-                              return false;
-                            }
-                          },
-                          args: [records, metadata],
-                        },
-                        /**
-                         * Callback after script execution
-                         */
-                        () => {
-                          // Wait a short time to ensure data is saved before closing
-                          setTimeout(
-                            /**
-                             * Timeout callback to close the tab after data is saved
-                             */
-                            () => {
-                              // Close the background tab
-                              chrome.tabs.remove(
-                                newTab.id,
-                                /**
-                                 * Callback after tab is closed
-                                 */
-                                function () {
-                                  console.log(
-                                    `Background sync tab closed: ${newTab.id}`,
-                                  );
-
-                                  // Track completion and reset flag when all operations are done
-                                  syncOperationsCompleted++;
-                                  if (
-                                    syncOperationsCompleted ===
-                                    syncOperationsTotal
-                                  ) {
-                                    console.log(
-                                      "All sync operations completed, resuming polling",
-                                    );
-                                    syncInProgress = false;
-                                  }
-                                },
-                              );
-                            },
-                            500,
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          );
-        },
-      );
+      // Use the shared sync function with background tabs
+      ClipboardSync.syncClipboardToTrustedDomains(records, metadata, {
+        useBackgroundTabs: true,
+        onComplete: function(results) {
+          // Reset the flag when all operations are done
+          console.log("Sync operations completed:", results);
+          syncInProgress = false;
+        }
+      });
     }
 
     /**
