@@ -39,205 +39,223 @@ function syncClipboardToTrustedDomains(records, metadata, options = {}) {
         return;
       }
 
-      // Get all tabs to find ones that match our trusted domains
+      // Get all tabs
       chrome.tabs.query({}, function (tabs) {
-        // Filter for trusted tabs
-        const trustedTabs = tabs.filter((tab) => {
-          // Skip the source tab that triggered this update
-          if (sourceTabId && tab.id === sourceTabId) return false;
-
-          if (
-            !tab.url ||
-            (!tab.url.startsWith("http://") && !tab.url.startsWith("https://"))
-          ) {
-            return false;
-          }
-
-          try {
-            const url = new URL(tab.url);
-            const hostname = url.hostname;
-
-            // Check if tab belongs to a trusted domain
-            for (const domain of allowedDomains) {
-              if (hostname.includes(domain) || domain.includes(hostname)) {
-                // Skip tabs that already have our sync fragment when using background tabs
-                if (
-                  useBackgroundTabs &&
-                  tab.url.includes("#ifs-clipboard-sync")
-                ) {
-                  return false;
-                }
-                return true;
-              }
+        // Skip tabs with sync fragment to avoid loops
+        const filteredTabs = tabs.filter(tab => {
+          return tab.url && 
+                 (tab.url.startsWith("http://") || tab.url.startsWith("https://")) &&
+                 (!useBackgroundTabs || !tab.url.includes("#ifs-clipboard-sync")) &&
+                 (!sourceTabId || tab.id !== sourceTabId);
+        });
+        
+        // Group tabs by domain
+        const domainTabsMap = new Map();
+        
+        // Process each trusted domain
+        let syncOperationsTotal = 0;
+        let syncOperationsCompleted = 0;
+        let syncOperationsSuccessful = 0;
+        
+        // Build domain-to-tabs mapping
+        allowedDomains.forEach(domain => {
+          const domainLower = domain.toLowerCase();
+          const matchingTabs = filteredTabs.filter(tab => {
+            try {
+              const url = new URL(tab.url);
+              const hostname = url.hostname.toLowerCase();
+              return hostname.includes(domainLower) || domainLower.includes(hostname);
+            } catch (e) {
+              return false;
             }
-            return false;
-          } catch (e) {
-            return false;
+          });
+          
+          if (matchingTabs.length > 0) {
+            domainTabsMap.set(domain, matchingTabs);
+            // Add to total operations counter
+            syncOperationsTotal += Math.min(2, matchingTabs.length); // Count at most 2 operations per domain
           }
         });
-
-        // If no trusted tabs, exit
-        if (trustedTabs.length === 0) {
+        
+        // If no tabs match any trusted domain
+        if (domainTabsMap.size === 0) {
           syncResult.message = "No trusted tabs to sync to";
           if (onComplete) onComplete(syncResult);
           resolve(syncResult);
           return;
         }
-
-        // Track sync operations
-        let syncOperationsTotal = trustedTabs.length;
-        let syncOperationsCompleted = 0;
-        let syncOperationsSuccessful = 0;
-
-        // Process each trusted tab
-        trustedTabs.forEach((tab) => {
-          if (useBackgroundTabs) {
-            // Create a new URL with our sync fragment
-            const syncUrl = tab.url + "/#ifs-clipboard-sync";
-
-            // Create a background tab with the sync URL
-            chrome.tabs.create(
-              { url: syncUrl, active: false },
-              function (newTab) {
-                // Execute script to update localStorage in this background tab
-                chrome.scripting.executeScript(
-                  {
-                    target: { tabId: newTab.id },
-                    function: function (data, meta) {
-                      try {
-                        // Update localStorage with our data
-                        localStorage.setItem(
-                          "IFS-Aurena-CopyPasteRecordStorage",
-                          " " + data,
-                        );
-                        if (meta) {
-                          localStorage.setItem("TcclClipboardMetadata", meta);
-                        }
-                        console.log(
-                          "[IFS Clipboard] Sync completed via background tab",
-                        );
-                        return true;
-                      } catch (error) {
-                        console.error(
-                          "[IFS Clipboard] Background tab sync failed:",
-                          error,
-                        );
-                        return false;
-                      }
-                    },
-                    args: [records, metadata],
-                  },
-                  () => {
-                    chrome.tabs.remove(newTab.id, function () {
-                      syncOperationsCompleted++;
-                      syncOperationsSuccessful++;
-
-                      syncResult.details.push({
-                        tabId: tab.id,
-                        newTabId: newTab.id,
-                        success: true,
-                        url: tab.url,
-                        method: "backgroundTab",
-                      });
-
-                      // Check if all operations are complete
-                      if (syncOperationsCompleted === syncOperationsTotal) {
-                        finalizeSyncOperation();
-                      }
-                    });
-                  },
-                );
-              },
-            );
+        
+        // Now process each domain's tabs
+        domainTabsMap.forEach((domainTabs, domain) => {
+          if (domainTabs.length >= 2) {
+            // Case: 2+ tabs exist for this domain
+            // Update first tab with normal data
+            updateTabStorage(domainTabs[0], records, metadata, false).then(result => {
+              syncOperationsCompleted++;
+              if (result.success) syncOperationsSuccessful++;
+              syncResult.details.push(result);
+              
+              // Update second tab with space-prefixed data
+              return updateTabStorage(domainTabs[1], records, metadata, true);
+            }).then(result => {
+              syncOperationsCompleted++;
+              if (result.success) syncOperationsSuccessful++;
+              syncResult.details.push(result);
+              
+              checkCompletion();
+            }).catch(error => {
+              console.error("Error updating domain tabs:", error);
+              syncOperationsCompleted += 2; // Count both operations as completed
+              syncResult.details.push({
+                domain: domain,
+                success: false,
+                error: error.message,
+                method: "directInjection"
+              });
+              
+              checkCompletion();
+            });
           } else {
-            // Direct injection approach
-            chrome.scripting.executeScript(
-              {
-                target: { tabId: tab.id },
-                function: function (data, meta) {
+            // Case: Only 1 tab exists for this domain
+            if (useBackgroundTabs) {
+              // Create a background tab, update it, and close it
+              createAndUpdateBackgroundTab(domain, domainTabs[0].url, records, metadata).then(result => {
+                syncOperationsCompleted++;
+                if (result.success) syncOperationsSuccessful++;
+                syncResult.details.push(result);
+                
+                checkCompletion();
+              });
+            } else {
+              // Direct injection to the single tab
+              updateTabStorage(domainTabs[0], records, metadata, false).then(result => {
+                syncOperationsCompleted++;
+                if (result.success) syncOperationsSuccessful++;
+                syncResult.details.push(result);
+                
+                checkCompletion();
+              });
+            }
+          }
+        });
+        
+        // Helper function to check if all operations are done
+        function checkCompletion() {
+          if (syncOperationsCompleted >= syncOperationsTotal) {
+            finalizeSyncOperation();
+          }
+        }
+        
+        // Helper function to update storage in a tab
+        function updateTabStorage(tab, data, meta, addSpace) {
+          return new Promise((resolve) => {
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              function: function(data, meta, addSpace) {
+                try {
+                  // Add space to data if requested
+                  const dataToStore = addSpace ? " " + data : data;
+                  
+                  localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", dataToStore);
+                  if (meta) {
+                    localStorage.setItem("TcclClipboardMetadata", meta);
+                  }
+                  console.log("[IFS Clipboard] Data synced successfully at:", location.href);
+                  return {
+                    success: true,
+                    domain: location.hostname,
+                    url: location.href
+                  };
+                } catch (error) {
+                  console.error("[IFS Clipboard] Sync failed:", error);
+                  return {
+                    success: false,
+                    error: error.message,
+                    url: location.href
+                  };
+                }
+              },
+              args: [data, meta, addSpace]
+            }, (results) => {
+              let tabResult = {
+                tabId: tab.id,
+                url: tab.url,
+                method: "directInjection",
+                success: false
+              };
+              
+              if (results && results[0] && results[0].result) {
+                const scriptResult = results[0].result;
+                if (scriptResult.success) {
+                  tabResult.success = true;
+                  tabResult.domain = scriptResult.domain;
+                } else {
+                  tabResult.error = scriptResult.error || "Unknown error";
+                }
+              } else if (chrome.runtime.lastError) {
+                tabResult.error = chrome.runtime.lastError.message;
+              }
+              
+              resolve(tabResult);
+            });
+          });
+        }
+        
+        // Helper function to create, update and close a background tab
+        function createAndUpdateBackgroundTab(domain, baseUrl, data, meta) {
+          return new Promise((resolve) => {
+            // Create sync URL - use base URL or construct one
+            const syncUrl = baseUrl 
+              ? baseUrl + "#ifs-clipboard-sync" 
+              : `https://${domain}/#ifs-clipboard-sync`;
+            
+            chrome.tabs.create({ url: syncUrl, active: false }, function(newTab) {
+              chrome.scripting.executeScript({
+                target: { tabId: newTab.id },
+                function: function(data, meta) {
                   try {
-                    localStorage.setItem(
-                      "IFS-Aurena-CopyPasteRecordStorage",
-                      data,
-                    );
+                    localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
                     if (meta) {
                       localStorage.setItem("TcclClipboardMetadata", meta);
                     }
-                    console.log(
-                      "[IFS Clipboard] Data synced successfully at:",
-                      location.href,
-                    );
-                    return {
-                      success: true,
-                      domain: location.hostname,
-                      url: location.href,
-                    };
+                    return true;
                   } catch (error) {
-                    console.error("[IFS Clipboard] Sync failed:", error);
-                    return {
-                      success: false,
-                      error: error.message,
-                      url: location.href,
-                    };
+                    console.error("[IFS Clipboard] Background tab sync failed:", error);
+                    return false;
                   }
                 },
-                args: [records, metadata],
-              },
-              (results) => {
-                syncOperationsCompleted++;
-                let tabResult = {
-                  tabId: tab.id,
-                  success: false,
-                  url: tab.url,
-                  method: "directInjection",
-                };
-
-                if (
-                  results &&
-                  results[0] &&
-                  results[0].result &&
-                  results[0].result.success
-                ) {
-                  syncOperationsSuccessful++;
-                  tabResult.success = true;
-                  tabResult.domain = results[0].result.domain;
-                } else {
-                  let errorMsg = "Unknown error";
-                  if (
-                    results &&
-                    results[0] &&
-                    results[0].result &&
-                    results[0].result.error
-                  ) {
-                    errorMsg = results[0].result.error;
-                  } else if (chrome.runtime.lastError) {
-                    errorMsg = chrome.runtime.lastError.message;
-                  }
-                  tabResult.error = errorMsg;
-                }
-
-                syncResult.details.push(tabResult);
-
-                // Check if all operations are complete
-                if (syncOperationsCompleted === syncOperationsTotal) {
-                  finalizeSyncOperation();
-                }
-              },
-            );
-          }
-        });
-
-        // Function to handle completion of all sync operations
+                args: [data, meta]
+              }, (results) => {
+                // Determine success
+                const success = results && results[0] && results[0].result === true;
+                
+                // Close tab immediately
+                chrome.tabs.remove(newTab.id, () => {
+                  resolve({
+                    domain: domain,
+                    newTabId: newTab.id,
+                    success: success,
+                    url: syncUrl,
+                    method: "backgroundTab",
+                    error: !success ? "Script execution failed" : undefined
+                  });
+                });
+              });
+            });
+          });
+        }
+        
+        // Handle completion of all sync operations
         function finalizeSyncOperation() {
           syncResult.success = syncOperationsSuccessful > 0;
-          syncResult.message = `Synced to ${syncOperationsSuccessful}/${syncOperationsTotal} tabs`;
-
+          syncResult.message = `Synced to ${syncOperationsSuccessful}/${syncOperationsTotal} operations across ${domainTabsMap.size} domains`;
+          
           console.log("All sync operations completed:", syncResult);
-
+          
           if (onComplete) {
             onComplete(syncResult);
           }
-
+          
           resolve(syncResult);
         }
       });
