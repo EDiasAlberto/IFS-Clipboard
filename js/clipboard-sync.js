@@ -204,43 +204,122 @@ function syncClipboardToTrustedDomains(records, metadata, options = {}) {
         // Helper function to create, update and close a background tab
         function createAndUpdateBackgroundTab(domain, baseUrl, data, meta) {
           return new Promise((resolve) => {
-            // Create sync URL - use base URL or construct one
-            const syncUrl = baseUrl 
-              ? baseUrl + "#ifs-clipboard-sync" 
-              : `https://${domain}/#ifs-clipboard-sync`;
+            // Create a direct URL to the target domain (no data URL intermediary)
+            const targetUrl = baseUrl || `https://${domain}/`;
+            const syncUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + `sync=true&t=${Date.now()}#ifs-clipboard-sync`;
             
+            console.log(`Creating direct background tab for domain: ${domain}`);
+            
+            // Create tab directly with the target domain URL
             chrome.tabs.create({ url: syncUrl, active: false }, function(newTab) {
-              chrome.scripting.executeScript({
-                target: { tabId: newTab.id },
-                function: function(data, meta) {
-                  try {
-                    localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
-                    if (meta) {
-                      localStorage.setItem("TcclClipboardMetadata", meta);
-                    }
-                    return true;
-                  } catch (error) {
-                    console.error("[IFS Clipboard] Background tab sync failed:", error);
-                    return false;
-                  }
-                },
-                args: [data, meta]
-              }, (results) => {
-                // Determine success
-                const success = results && results[0] && results[0].result === true;
-                
-                // Close tab immediately
-                chrome.tabs.remove(newTab.id, () => {
-                  resolve({
-                    domain: domain,
-                    newTabId: newTab.id,
-                    success: success,
-                    url: syncUrl,
-                    method: "backgroundTab",
-                    error: !success ? "Script execution failed" : undefined
+              // Track whether the operation has completed
+              let operationCompleted = false;
+              
+              // Setup a listener for tab updates to detect when page has loaded
+              const tabUpdateListener = function(tabId, changeInfo, tab) {
+                // Only proceed if this is our tab and it's done loading
+                if (tabId === newTab.id && changeInfo.status === 'complete' && !operationCompleted) {
+                  // Remove listener to avoid duplicate processing
+                  chrome.tabs.onUpdated.removeListener(tabUpdateListener);
+                  
+                  // Now inject script to set localStorage directly (no iframe needed)
+                  chrome.scripting.executeScript({
+                    target: { tabId: newTab.id },
+                    function: function(data, meta) {
+                      try {
+                        // Set the data directly in this tab
+                        localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
+                        if (meta) {
+                          localStorage.setItem("TcclClipboardMetadata", meta);
+                        }
+                        
+                        // Add timestamp for tracking
+                        localStorage.setItem("IFS-Clipboard-SyncTimestamp", Date.now().toString());
+                        
+                        // Verify the data was actually stored
+                        const verifyData = localStorage.getItem("IFS-Aurena-CopyPasteRecordStorage");
+                        if (verifyData !== data) {
+                          throw new Error("Data verification failed - written data doesn't match");
+                        }
+                        
+                        return {
+                          success: true,
+                          message: "Storage updated successfully"
+                        };
+                      } catch (error) {
+                        console.error("[IFS Clipboard] Direct sync failed:", error);
+                        return {
+                          success: false,
+                          error: error.message
+                        };
+                      }
+                    },
+                    args: [data, meta]
+                  }, (results) => {
+                    // Mark as completed to prevent multiple executions
+                    operationCompleted = true;
+                    
+                    // Determine if the operation was successful
+                    const success = results && results[0] && results[0].result && results[0].result.success;
+                    const errorMsg = results && results[0] && results[0].result && results[0].result.error;
+                    
+                    // Close the tab and return result
+                    chrome.tabs.remove(newTab.id, () => {
+                      resolve({
+                        domain: domain,
+                        newTabId: newTab.id,
+                        success: success,
+                        url: targetUrl,
+                        error: !success ? (errorMsg || "Script execution failed") : undefined,
+                        method: "directBackgroundTab"
+                      });
+                    });
                   });
-                });
-              });
+                }
+              };
+              
+              // Add the listener for tab updates
+              chrome.tabs.onUpdated.addListener(tabUpdateListener);
+              
+              // Set a timeout to prevent hanging
+              setTimeout(() => {
+                if (!operationCompleted) {
+                  // Remove listener if we're timing out
+                  chrome.tabs.onUpdated.removeListener(tabUpdateListener);
+                  operationCompleted = true;
+                  
+                  // Attempt one last execution before closing
+                  chrome.scripting.executeScript({
+                    target: { tabId: newTab.id },
+                    function: function(data, meta) {
+                      try {
+                        localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
+                        if (meta) {
+                          localStorage.setItem("TcclClipboardMetadata", meta);
+                        }
+                        return true;
+                      } catch (e) {
+                        return false;
+                      }
+                    },
+                    args: [data, meta]
+                  }, (results) => {
+                    const lastAttemptSuccess = results && results[0] && results[0].result === true;
+                    
+                    chrome.tabs.remove(newTab.id, () => {
+                      resolve({
+                        domain: domain,
+                        newTabId: newTab.id,
+                        success: lastAttemptSuccess,
+                        url: targetUrl,
+                        error: !lastAttemptSuccess ? "Operation timed out, final attempt " + 
+                          (lastAttemptSuccess ? "succeeded" : "failed") : undefined,
+                        method: "directBackgroundTab"
+                      });
+                    });
+                  });
+                }
+              }, 10000); // 10 second timeout
             });
           });
         }
