@@ -498,159 +498,21 @@ function syncToAllTrustedTabs(
   clipboardData,
   metadata,
   sourceTabId,
-  sendResponse = null,
+  sendResponse = null
 ) {
-  metadata = metadata ? metadata : null;
-  chrome.storage.local.get("allowedDomains", function (result) {
-    const allowedDomains = result.allowedDomains || [];
-    console.log("Allowed domains for sync:", allowedDomains);
-
-    if (allowedDomains.length === 0) {
-      console.log("No trusted domains configured");
-      if (sendResponse)
+  // Use the shared sync function with direct injection (default)
+  ClipboardSync.syncClipboardToTrustedDomains(clipboardData, metadata, {
+    sourceTabId: sourceTabId,
+    useBackgroundTabs: false,
+    onComplete: function(results) {
+      if (sendResponse) {
         sendResponse({
-          success: true,
-          message: "No trusted domains to sync to",
+          success: results.success,
+          message: results.message,
+          details: results.details
         });
-      return;
-    }
-
-    // Get all tabs
-    chrome.tabs.query({}, (tabs) => {
-      console.log("Found total tabs:", tabs.length);
-
-      // Filter tabs matching trusted domains
-      const trustedTabs = tabs.filter((tab) => {
-        // Skip the source tab that triggered this update
-        if (sourceTabId && tab.id === sourceTabId) return false;
-
-        if (
-          !tab.url ||
-          (!tab.url.startsWith("http://") && !tab.url.startsWith("https://"))
-        ) {
-          return false;
-        }
-
-        try {
-          const url = new URL(tab.url);
-          const hostname = url.hostname;
-
-          for (const domain of allowedDomains) {
-            if (hostname.includes(domain) || domain.includes(hostname)) {
-              console.log(
-                `Tab ${tab.id} is trusted - matches domain: ${domain}`,
-              );
-              return true;
-            }
-          }
-
-          return false;
-        } catch (e) {
-          console.error(`Error checking tab ${tab.id}:`, e);
-          return false;
-        }
-      });
-
-      console.log("Trusted tabs found:", trustedTabs.length);
-
-      if (trustedTabs.length === 0) {
-        console.log("No tabs to sync to");
-        if (sendResponse)
-          sendResponse({
-            success: true,
-            message: "No matching tabs to sync to",
-          });
-        return;
       }
-
-      // Track sync operations
-      let completed = 0;
-      let successful = 0;
-      let syncResults = [];
-
-      // Update localStorage for each tab
-      trustedTabs.forEach((tab) => {
-        console.log(`Syncing to tab ${tab.id}: ${tab.url}`);
-
-        chrome.scripting.executeScript(
-          {
-            target: { tabId: tab.id },
-            function: function (data, meta) {
-              try {
-                localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
-
-                if (meta) {
-                  localStorage.setItem("TcclClipboardMetadata", meta);
-                }
-
-                console.log(
-                  "[IFS Clipboard] Data synced successfully at:",
-                  location.href,
-                );
-                return {
-                  success: true,
-                  domain: location.hostname,
-                  url: location.href,
-                };
-              } catch (error) {
-                console.error("[IFS Clipboard] Sync failed:", error);
-                return {
-                  success: false,
-                  error: error.message,
-                  url: location.href,
-                };
-              }
-            },
-            args: [clipboardData, metadata],
-          },
-          (results) => {
-            completed++;
-
-            if (
-              results &&
-              results[0] &&
-              results[0].result &&
-              results[0].result.success
-            ) {
-              successful++;
-              syncResults.push({
-                tabId: tab.id,
-                success: true,
-                url: tab.url,
-                domain: results[0].result.domain,
-              });
-            } else {
-              let errorMsg = "Unknown error";
-              if (
-                results &&
-                results[0] &&
-                results[0].result &&
-                results[0].result.error
-              ) {
-                errorMsg = results[0].result.error;
-              } else if (chrome.runtime.lastError) {
-                errorMsg = chrome.runtime.lastError.message;
-              }
-              syncResults.push({
-                tabId: tab.id,
-                success: false,
-                url: tab.url,
-                error: errorMsg,
-              });
-            }
-
-            // When all operations are complete, respond
-            if (completed === trustedTabs.length && sendResponse) {
-              sendResponse({
-                success: successful > 0,
-                message: `Synced to ${successful}/${trustedTabs.length} tabs`,
-                details: syncResults,
-              });
-            }
-          },
-        );
-      });
-    });
+    }
   });
 }
 
