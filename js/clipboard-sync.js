@@ -204,18 +204,59 @@ function syncClipboardToTrustedDomains(records, metadata, options = {}) {
         // Helper function to create, update and close a background tab
         function createAndUpdateBackgroundTab(domain, baseUrl, data, meta) {
           return new Promise((resolve) => {
-            // Create a direct URL to the target domain (no data URL intermediary)
-            const targetUrl = baseUrl || `https://${domain}/`;
-            const syncUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + `sync=true&t=${Date.now()}#ifs-clipboard-sync`;
+            // Use a minimal URL (favicon or other lightweight resource)
+            const targetUrl = baseUrl 
+              ? new URL(baseUrl).origin + "/favicon.ico" 
+              : `https://${domain}/favicon.ico`;
             
-            console.log(`Creating direct background tab for domain: ${domain}`);
+            const syncUrl = targetUrl + `?sync=true&t=${Date.now()}#ifs-clipboard-sync`;
             
-            // Create tab directly with the target domain URL
+            let operationCompleted = false;
+            
+            // Create the tab
             chrome.tabs.create({ url: syncUrl, active: false }, function(newTab) {
-              // Track whether the operation has completed
-              let operationCompleted = false;
+              // Use webNavigation for earlier script execution
+              const navListener = function(details) {
+                if (details.tabId === newTab.id && details.frameId === 0 && !operationCompleted) {
+                  // Execute as soon as navigation is committed (before "complete")
+                  chrome.scripting.executeScript({
+                    target: { tabId: newTab.id },
+                    function: function(data, meta) {
+                      try {
+                        localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", data);
+                        if (meta) {
+                          localStorage.setItem("TcclClipboardMetadata", meta);
+                        }
+                        return true;
+                      } catch (e) {
+                        return false;
+                      }
+                    },
+                    args: [data, meta]
+                  }, (results) => {
+                    const success = results && results[0] && results[0].result === true;
+                    
+                    if (success) {
+                      // If successful, mark completed and close tab
+                      operationCompleted = true;
+                      chrome.webNavigation.onCommitted.removeListener(navListener);
+                      
+                      chrome.tabs.remove(newTab.id, () => {
+                        resolve({
+                          domain: domain,
+                          success: true,
+                          method: "earlyNavigation"
+                        });
+                      });
+                    }
+                    // If not successful, we'll let the other listeners try again
+                  });
+                }
+              };
               
-              // Setup a listener for tab updates to detect when page has loaded
+              chrome.webNavigation.onCommitted.addListener(navListener);
+              
+              // Keep the existing complete listener as a fallback
               const tabUpdateListener = function(tabId, changeInfo, tab) {
                 // Only proceed if this is our tab and it's done loading
                 if (tabId === newTab.id && changeInfo.status === 'complete' && !operationCompleted) {
