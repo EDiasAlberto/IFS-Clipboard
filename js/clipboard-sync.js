@@ -45,9 +45,9 @@ function syncClipboardToTrustedDomains(records, metadata, options = {}) {
         const filteredTabs = tabs.filter(tab => {
           return tab.url && 
                  (tab.url.startsWith("http://") || tab.url.startsWith("https://")) &&
-                 (!useBackgroundTabs || !tab.url.includes("#ifs-clipboard-sync")) &&
-                 (!sourceTabId || tab.id !== sourceTabId);
+                 (!useBackgroundTabs || !tab.url.includes("#ifs-clipboard-sync"));
         });
+
         
         // Group tabs by domain
         const domainTabsMap = new Map();
@@ -87,6 +87,7 @@ function syncClipboardToTrustedDomains(records, metadata, options = {}) {
         
         // Now process each domain's tabs
         domainTabsMap.forEach((domainTabs, domain) => {
+          console.log("UPDATING THE FOLLOWING TABS: ", domainTabs);
           if (domainTabs.length >= 2) {
             // Case: 2+ tabs exist for this domain
             // Update first tab with normal data
@@ -117,7 +118,7 @@ function syncClipboardToTrustedDomains(records, metadata, options = {}) {
             });
           } else {
             // Case: Only 1 tab exists for this domain
-            if (useBackgroundTabs) {
+            if (useBackgroundTabs && domainTabs[0].id !== sourceTabId) {
               // Create a background tab, update it, and close it
               createAndUpdateBackgroundTab(domain, domainTabs[0].url, records, metadata).then(result => {
                 syncOperationsCompleted++;
@@ -203,6 +204,7 @@ function syncClipboardToTrustedDomains(records, metadata, options = {}) {
         
         // Helper function to create, update and close a background tab
         function createAndUpdateBackgroundTab(domain, baseUrl, data, meta) {
+          console.log("SYNCING BACKGROUND TAB:", domain, baseUrl);
           return new Promise((resolve) => {
             // Use a minimal URL (favicon or other lightweight resource)
             const targetUrl = baseUrl 
