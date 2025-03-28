@@ -551,3 +551,84 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     });
   }
 });
+
+// Add this code at the end of your service-worker.js file
+
+// Listen for extension suspension (occurs when browser is closing)
+chrome.runtime.onSuspend.addListener(() => {
+  console.log("Browser closing - clearing clipboard data");
+  
+  // Clear data from Chrome's storage
+  chrome.storage.local.set({
+    "IFS-Aurena-CopyPasteRecordStorage": "[]",
+    "TcclClipboardMetadata": null,
+    "lastClipboardClear": new Date().toISOString()
+  });
+  
+  // Attempt to clear data from all trusted tabs
+  // This is a best-effort operation as we have limited time during suspension
+  try {
+    // Get allowed domains
+    chrome.storage.local.get("allowedDomains", function(result) {
+      const allowedDomains = result.allowedDomains || [];
+      
+      if (allowedDomains.length > 0) {
+        // Get all tabs
+        chrome.tabs.query({}, function(tabs) {
+          // Filter to tabs from trusted domains
+          const trustedTabs = tabs.filter(tab => {
+            if (!tab.url) return false;
+            try {
+              const url = new URL(tab.url);
+              for (const domain of allowedDomains) {
+                if (url.hostname.includes(domain) || domain.includes(url.hostname)) {
+                  return true;
+                }
+              }
+              return false;
+            } catch (e) {
+              return false;
+            }
+          });
+          
+          // Clear clipboard data in each trusted tab
+          trustedTabs.forEach(tab => {
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              function: function() {
+                try {
+                  // Clear clipboard data
+                  localStorage.removeItem("IFS-Aurena-CopyPasteRecordStorage");
+                  localStorage.removeItem("TcclClipboardMetadata");
+                  
+                  // Or set to empty array if complete removal not desired
+                  // localStorage.setItem("IFS-Aurena-CopyPasteRecordStorage", "[]");
+                  
+                  return true;
+                } catch (e) {
+                  return false;
+                }
+              }
+            });
+          });
+        });
+      }
+    });
+  } catch (error) {
+    console.error("Error clearing clipboard data on browser close:", error);
+  }
+});
+
+// Add a handler for browser startup to check if clipboard was cleared
+chrome.runtime.onStartup.addListener(() => {
+  console.log("Browser starting - checking clipboard status");
+  
+  // Check if we have a record of clearing the clipboard on last shutdown
+  chrome.storage.local.get("lastClipboardClear", function(result) {
+    if (result.lastClipboardClear) {
+      console.log("Clipboard was cleared on last shutdown at:", result.lastClipboardClear);
+    } else {
+      console.log("No record of clipboard clearing on previous shutdown");
+    }
+  });
+});
