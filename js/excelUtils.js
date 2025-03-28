@@ -3,7 +3,7 @@
  */
 
 /**
- * Exports data to Excel
+ * Exports data to Excel with filename based on luname column
  * @param {Array<Object>} data - Array of objects to export
  * @returns {Promise<void>} - Promise that resolves when export is complete
  */
@@ -24,11 +24,35 @@ function exportToExcel(data) {
       // Add the worksheet to the workbook
       XLSX.utils.book_append_sheet(wb, ws, "Clipboard Data");
       
-      // Generate Excel file with current timestamp in filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      XLSX.writeFile(wb, `IFS_Clipboard_Export_${timestamp}.xlsx`);
+      // Generate filename using luname if available
+      let filename = "IFS_Clipboard_Export";
       
-      console.log("Excel export completed successfully");
+      // Check if the luname column exists in the first record
+      if (data[0] && 'luname' in data[0]) {
+        // Get the value from the first row's luname column
+        const lunameValue = data[0]['luname'];
+        
+        if (lunameValue) {
+          // Sanitize filename - remove characters that aren't safe for filenames
+          const sanitizedLuname = String(lunameValue)
+            .replace(/[\\/:*?"<>|]/g, '_') // Replace unsafe characters
+            .replace(/\s+/g, '_')          // Replace whitespace with underscore
+            .substring(0, 50);             // Limit length
+          
+          if (sanitizedLuname) {
+            filename += `_${sanitizedLuname}`;
+          }
+        }
+      }
+      
+      // Add timestamp for uniqueness
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      filename += `_${timestamp}.xlsx`;
+      
+      // Write the file
+      XLSX.writeFile(wb, filename);
+      
+      console.log(`Excel export completed successfully as ${filename}`);
       resolve();
     } catch (error) {
       console.error("Error exporting to Excel:", error);
