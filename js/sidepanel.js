@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const tableContainer = document.getElementById("clipboard-data-table");
     const historyContainer = document.getElementById("history-container");
     const exportButton = document.getElementById("export-excel");
+    const importButton = document.getElementById("import-excel");
 
     // Current clipboard data
     let currentClipboardData = null;
@@ -154,29 +155,8 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     }
 
-    /**
-     * Creates and adds the import button to the UI
-     * Places it next to the export button with consistent styling
-     */
-    function addImportButton() {
-      // Create import button with same styling as export
-      const importButton = document.createElement("button");
-      importButton.id = "import-excel";
-      importButton.className = exportButton.className; // Use the same styling
-      importButton.textContent = "Import Data";
-
-      // Insert import button before export button
-      exportButton.parentNode.insertBefore(importButton, exportButton);
-
-      // Add margin between buttons
-      exportButton.style.marginLeft = "10px";
-
-      // Add event listener
-      importButton.addEventListener("click", handleImportFromExcel);
-    }
-
-    // Add import button
-    addImportButton();
+    // Add click event to import button
+    importButton.addEventListener("click", handleImportFromExcel);
 
     /**
      * Renders the clipboard data table in the UI
