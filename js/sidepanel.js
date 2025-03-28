@@ -54,11 +54,12 @@ document.addEventListener("DOMContentLoaded", function () {
    * Sets up event listeners, clipboard monitoring, and data display
    */
   function initializeSidePanel() {
-    // Reference to containers
+    // Reference to containers and buttons
     const tableContainer = document.getElementById("clipboard-data-table");
     const historyContainer = document.getElementById("history-container");
     const exportButton = document.getElementById("export-excel");
     const importButton = document.getElementById("import-excel");
+    const clearButton = document.getElementById("clear-clipboard");
 
     // Current clipboard data
     let currentClipboardData = null;
@@ -73,6 +74,43 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Initialize history manager
     const historyManager = new HistoryManager(historyContainer, renderTable);
+
+    /**
+     * Handles clearing the clipboard data
+     * Removes data from storage and syncs the change across tabs
+     * @listens click
+     */
+    function handleClearClipboard() {
+      // Confirm before clearing
+      if (confirm("Are you sure you want to clear all clipboard data?")) {
+        // Set empty data
+        currentClipboardData = [];
+        
+        // Update UI
+        renderTable([]);
+        
+        // Create empty JSON string for syncing
+        const emptyData = JSON.stringify([]);
+        
+        // Save to local storage first
+        chrome.storage.local.set({ "IFS-Aurena-CopyPasteRecordStorage": emptyData }, function() {
+          console.log("Clipboard data cleared locally");
+          
+          // Sync to all tabs
+          syncViaBackgroundTab(emptyData, null);
+          
+          // Add to history with a special note
+          historyManager.addHistoryItem({
+            timestamp: new Date(),
+            records: [],
+            operation: "clear"
+          });
+        });
+      }
+    }
+    
+    // Add click event to clear button
+    clearButton.addEventListener("click", handleClearClipboard);
 
     /**
      * Handles exporting current clipboard data to Excel
